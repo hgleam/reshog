@@ -53,6 +53,13 @@ cli.main
   └─ render.render_group_table(...) / render.build_group_json(...)
 ```
 
+`--project` 指定時（PJ 別の合計）: `report.build_projects` が `--group` と同じ全プロセス走査
+（`report._scan_all`）を使い、`report._with_origins` で PJ 列と同じ由来を付けてから
+`group.bucket_processes` で束ねる。`--group` の `group_processes` も同じ `bucket_processes` に
+キー（`group_label`）を渡しているだけなので、合計・並べ方の規則は 1 か所にある。
+PJ の表記は `origin.label` が正本（PJ 列の表示と束ねるキーが同じ文字列になる）。
+PJ 不明のプロセスは順位に入れず、別の `ProcessGroup` として返す。
+
 `--app <label>` 指定時（アプリの内訳）: `report.build_app_processes` が同じ `group_label` で
 所属を判定し、プロセス単位の表（`render.render_table`）に落とす。
 ```

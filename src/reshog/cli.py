@@ -130,6 +130,14 @@ def _build_app(program: str, default_sort: str, help_text: str) -> typer.Typer:
             "--group",
             help="プロセス単位でなくアプリ単位に合算して表示する(分散して埋もれるものを炙り出す)。",
         ),
+        by_project: bool = typer.Option(
+            False,
+            "--project",
+            help=(
+                "プロジェクト(作業ディレクトリの git リポ / launchd ジョブ)ごとに"
+                "合算して表示する。"
+            ),
+        ),
         app: str | None = typer.Option(
             None,
             "--app",
@@ -165,6 +173,13 @@ def _build_app(program: str, default_sort: str, help_text: str) -> typer.Typer:
             )
             raise typer.Exit(code=1)
 
+        if by_project and (group_by_app or app is not None or kill):
+            console.print(
+                "[red]--project は --group / --app / --kill と併用できません"
+                "(合計の束ね方は 1 つ、停止対象は PID で選ぶため)。[/red]"
+            )
+            raise typer.Exit(code=1)
+
         if group_by_app and kill:
             console.print(
                 "[red]--group は --kill と併用できません"
@@ -176,7 +191,11 @@ def _build_app(program: str, default_sort: str, help_text: str) -> typer.Typer:
             if json_out or kill:
                 console.print("[red]--watch は --json / --kill と併用できません。[/red]")
                 raise typer.Exit(code=1)
-            _run_watch(console, count, grep, watch, group_by_app, app, sort)
+            _run_watch(console, count, grep, watch, group_by_app, app, sort, by_project)
+            return
+
+        if by_project:
+            _show_projects(console, count, grep, sort, json_out)
             return
 
         if app is not None:
@@ -216,6 +235,27 @@ def _build_app(program: str, default_sort: str, help_text: str) -> typer.Typer:
     return cli
 
 
+def _show_projects(
+    console: Console, count: int, grep: str | None, sort: str, json_out: bool = False
+) -> None:
+    """--project: PJ 別の合計を 1 回描画する(通常表示と --watch で共有)。
+
+    Args:
+        console: 出力先 Console。
+        count: 表示する PJ 数。
+        grep: 合算前に掛けるフィルタ。
+        sort: 並べる基準("mem" または "cpu")。
+        json_out: True なら JSON を出す。
+    """
+    projects, unknown, top_raw = report.build_projects(count, grep, sort)
+    system = report.build_system_memory(top_raw)
+    cpu = report.build_system_cpu(top_raw)
+    if json_out:
+        typer.echo(render.build_group_json(projects, system, cpu, "project", unknown))
+        return
+    render.render_group_table(console, projects, system, cpu, grep, sort, "project", unknown)
+
+
 def _run_watch(
     console: Console,
     count: int,
@@ -224,6 +264,7 @@ def _run_watch(
     group_by_app: bool = False,
     app: str | None = None,
     sort: str = "mem",
+    by_project: bool = False,
 ) -> None:
     """--watch: 一定間隔で画面を再描画し続ける。
 
@@ -235,9 +276,16 @@ def _run_watch(
         group_by_app: True ならアプリ単位に合算して描画する。
         app: 指定時はそのアプリに属するプロセスだけを描画する。
         sort: 並べる基準("mem" または "cpu")。
+        by_project: True なら PJ 別に合算して描画する。
     """
     try:
         while True:
+            if by_project:
+                console.clear()
+                _show_projects(console, count, grep, sort)
+                console.print(f"[dim]{interval:g}秒ごとに更新 / Ctrl-C で終了[/dim]")
+                time.sleep(interval)
+                continue
             if group_by_app:
                 groups, top_raw = report.build_groups(count, grep, sort)
                 system = report.build_system_memory(top_raw)

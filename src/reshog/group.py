@@ -5,6 +5,8 @@ Chromium 系ブラウザや MCP サーバはヘルパープロセスへ分散す
 親子関係をたどってアプリ単位へ畳み、その分散を可視化する。
 """
 
+from collections.abc import Callable
+
 from .models import Process, ProcessGroup, PsEntry
 
 # argv[0] がこれらのときは「何を動かしているか」(スクリプト名)を表示名に採る。
@@ -143,13 +145,32 @@ def group_processes(
         order: 並べる基準。"mem"(合計メモリ)または "cpu"(合計 CPU)。
 
     Returns:
+        ProcessGroup のリスト(並びは bucket_processes と同じ)。
+    """
+    return bucket_processes(processes, lambda p: group_label(p.pid, snapshot), order)
+
+
+def bucket_processes(
+    processes: list[Process], key: Callable[[Process], str], order: str = "mem"
+) -> list[ProcessGroup]:
+    """プロセスを key が返す名前で束ね、指定した資源の合計降順で返す。
+
+    アプリ別(--group)と PJ 別(--project)は束ねるキーだけが違う。並べ方を 2 か所に
+    書くと、片方だけ直って順位の付け方がずれるため、ここに 1 つだけ置く。
+
+    Args:
+        processes: 集約対象のプロセス(降順である必要はない)。
+        key: プロセスから束ねる名前を返す関数。
+        order: 並べる基準。"mem"(合計メモリ)または "cpu"(合計 CPU)。
+
+    Returns:
         ProcessGroup のリスト(指定資源の合計降順。同値なら件数の多い順)。
         グループ内の members も同じ基準の降順に並ぶ(最大単体の表示に使うため)。
     """
     by_cpu = order == "cpu"
     buckets: dict[str, list[Process]] = {}
     for process in processes:
-        buckets.setdefault(group_label(process.pid, snapshot), []).append(process)
+        buckets.setdefault(key(process), []).append(process)
 
     groups = [
         ProcessGroup(

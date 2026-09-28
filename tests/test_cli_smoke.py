@@ -13,6 +13,8 @@ import re
 import subprocess
 import sys
 
+import pytest
+
 CLI = [sys.executable, "-m", "reshog.cli"]
 # cpuhog は console script なので、同じ入口を import して直接叩く
 # （インストール済みの実行ファイルに依存すると、未インストールの環境で落ちる）。
@@ -44,6 +46,7 @@ class TestEntryPoint:
             "--grep",
             "--json",
             "--group",
+            "--project",
             "--app",
             "--watch",
             "--kill",
@@ -66,6 +69,12 @@ class TestOptionGuards:
 
     def test_group_with_app_is_rejected(self) -> None:
         result = _run("--group", "--app", "x")
+        assert result.returncode == 1
+        assert "併用できません" in result.stdout
+
+    @pytest.mark.parametrize("other", [["--group"], ["--app", "x"], ["--kill"]])
+    def test_project_with_other_views_is_rejected(self, other: list[str]) -> None:
+        result = _run("--project", *other)
         assert result.returncode == 1
         assert "併用できません" in result.stdout
 

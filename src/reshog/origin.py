@@ -58,6 +58,20 @@ def _main_repo_of(directory: Path, dot_git: Path) -> Path:
     return directory
 
 
+def label(found: Origin) -> str:
+    """PJ の表記。PJ 列と PJ 別の合計(--project)で共有する。
+
+    リポ名とジョブ名は別物なので、ジョブ名には `launchd:` を付けて見分けられるようにする。
+
+    Args:
+        found: 判定済みの由来。
+
+    Returns:
+        表示名。
+    """
+    return f"launchd:{found.name}" if found.kind == "launchd" else found.name
+
+
 def resolve(cwd: str | None, launchd_label: str | None) -> Origin | None:
     """作業ディレクトリと launchd のジョブ名から由来を決める。
 

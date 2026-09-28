@@ -3,15 +3,20 @@
 import json
 import shlex
 from datetime import datetime
+from typing import Literal
 
 from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 from rich.text import Text
 
+from . import origin
 from .models import COMMAND_BY_SORT, Origin, Process, ProcessGroup, SystemCpu, SystemMemory
 
 _MAX_CMD = 96
+
+# 集約の種類。"app" = --group(親子関係でアプリ別)、"project" = --project(PJ 別)。
+GroupKind = Literal["app", "project"]
 
 # この値以上を食っているものは赤で強調する(プロセス単位・アプリ単位で共通)。
 _ALERT_MB = 8000
@@ -30,16 +35,13 @@ def _shorten(command: str) -> str:
 
 
 def _origin_text(found: Origin | None) -> Text:
-    """PJ 列のセルを作る。
+    """PJ 列のセルを作る(表記は origin.label が正本)。
 
-    リポ名とジョブ名は別物なので、ジョブ名には `launchd:` を付けて見分けられるようにする。
-    どちらも他プロセス由来の文字列だが、Text に入れるのでマークアップとしては解釈されない。
+    他プロセス由来の文字列だが、Text に入れるのでマークアップとしては解釈されない。
     """
     if found is None:
         return Text("-", style="dim")
-    if found.kind == "launchd":
-        return Text(f"launchd:{found.name}", style="dim")
-    return Text(found.name)
+    return Text(origin.label(found), style="dim" if found.kind == "launchd" else "")
 
 
 def _started_text(started_at: datetime | None) -> Text:
@@ -222,8 +224,10 @@ def render_group_table(
     cpu: SystemCpu,
     grep: str | None = None,
     order: str = "mem",
+    kind: GroupKind = "app",
+    unknown: ProcessGroup | None = None,
 ) -> None:
-    """アプリ単位に集約した結果を表形式で出力する。
+    """アプリ別 / PJ 別に集約した結果を表形式で出力する。
 
     Args:
         console: 出力先の rich Console。
@@ -232,14 +236,17 @@ def render_group_table(
         cpu: システム全体の CPU 状況。
         grep: 適用中の -g パターン。指定時は「部分合計」であることを見出しに明示する。
         order: 並べた基準。"mem" または "cpu"。
+        kind: "app"(--group)または "project"(--project)。見出し・列名・提案文が変わる。
+        unknown: PJ 別のとき、PJ が分からなかったプロセスの合計(順位には入れない)。
     """
     _render_system(console, system, cpu)
 
     by_cpu = order == "cpu"
+    resource = "CPU合計" if by_cpu else "実メモリ合計"
     title = (
-        "アプリ別 CPU合計 (ヘルパープロセスを親子関係で合算)"
-        if by_cpu
-        else "アプリ別 実メモリ合計 (ヘルパープロセスを親子関係で合算)"
+        f"PJ 別 {resource} (作業ディレクトリの git リポ / launchd ジョブで合算)"
+        if kind == "project"
+        else f"アプリ別 {resource} (ヘルパープロセスを親子関係で合算)"
     )
     if grep:
         title += f" ※ -g {escape(shlex.quote(grep))} 一致プロセスのみの部分合計"
@@ -258,7 +265,7 @@ def render_group_table(
     table.add_column("件数", justify="right")
     table.add_column("最大単体", justify="right")
     table.add_column("最大PID", justify="right")
-    table.add_column("APP")
+    table.add_column("PJ" if kind == "project" else "APP")
 
     for rank, g in enumerate(groups, start=1):
         alert = g.total_cpu >= _ALERT_CPU if by_cpu else g.total_mb >= _ALERT_MB
@@ -290,30 +297,44 @@ def render_group_table(
             f"  [dim]最大単体: PID {top.largest.pid} "
             f"{escape(_shorten(top.largest.command))}[/dim]"
         )
+        # --app が受け取るのは APP 名だけ。PJ 名を渡す提案は打っても何も出ない。
+        if kind == "app":
+            console.print(
+                "  内訳を見るなら:  "
+                f"[bold]{COMMAND_BY_SORT[order]} --app "
+                f"{escape(shlex.quote(top.label))}[/bold]"
+            )
+    if unknown is not None:
+        amount = f"{unknown.total_cpu:g}%CPU" if by_cpu else format_mb(unknown.total_mb)
         console.print(
-            "  内訳を見るなら:  "
-            f"[bold]{COMMAND_BY_SORT[order]} --app "
-            f"{escape(shlex.quote(top.label))}[/bold]"
+            f"  [dim]PJ 不明(GUI アプリ・root のプロセス等): {amount}"
+            f" / {unknown.count}プロセス  ※順位には入れていない[/dim]"
         )
     console.print()
 
 
 def build_group_json(
-    groups: list[ProcessGroup], system: SystemMemory, cpu: SystemCpu
+    groups: list[ProcessGroup],
+    system: SystemMemory,
+    cpu: SystemCpu,
+    kind: GroupKind = "app",
+    unknown: ProcessGroup | None = None,
 ) -> str:
-    """アプリ別集約結果を機械可読な JSON 文字列にする。
+    """アプリ別 / PJ 別の集約結果を機械可読な JSON 文字列にする。
 
     Args:
         groups: グループ一覧。
         system: システムのメモリ状況。
         cpu: システムの CPU 状況。
+        kind: "app" なら `groups`、"project" なら `projects` と `unknown` を出す。
+        unknown: PJ が分からなかったプロセスの合計(kind="project" のときだけ使う)。
 
     Returns:
         整形済み JSON 文字列。
     """
-    payload = {
+    payload: dict[str, object] = {
         "system": _system_payload(system, cpu),
-        "groups": [
+        "projects" if kind == "project" else "groups": [
             {
                 "rank": rank,
                 "label": g.label,
@@ -331,4 +352,10 @@ def build_group_json(
             for rank, g in enumerate(groups, start=1)
         ],
     }
+    if kind == "project":
+        payload["unknown"] = (
+            {"total_mb": unknown.total_mb, "total_cpu": unknown.total_cpu, "count": unknown.count}
+            if unknown
+            else None
+        )
     return json.dumps(payload, ensure_ascii=False, indent=2)
