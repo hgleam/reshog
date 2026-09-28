@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 
 from . import collect, group, origin, parse
-from .models import Process, ProcessGroup, SystemCpu, SystemMemory
+from .models import Process, ProcessGroup, PsEntry, SystemCpu, SystemMemory
 
 # --group は「分散して埋もれているアプリ」を探すのが目的なので、全プロセスを走査する。
 # 走査幅は ps の実プロセス数から決める(固定上限にすると、超えた分が黙って合計から落ちる)。
@@ -109,6 +109,49 @@ def build_groups(
         top の走査幅は ps の実プロセス数から決める(固定上限で切ると、あふれた分が
         黙って合計から抜け、「分散して埋もれている合計」という目的が崩れる)。
     """
+    processes, snapshot, raw = _scan_all(pattern, order)
+    return group.group_processes(processes, snapshot, order)[:count], raw
+
+
+def build_projects(
+    count: int, pattern: str | None = None, order: str = "mem"
+) -> tuple[list[ProcessGroup], ProcessGroup | None, str]:
+    """PJ 別(作業ディレクトリの git リポ / launchd ジョブ)に合計した上位を返す。
+
+    判定は PJ 列と同じ(`origin.resolve`)。PJ が分からないプロセスは順位に混ぜず、
+    別に合計して返す(GUI アプリがまとめて 1 位に居座り、PJ どうしの比較が見えなくなるため)。
+
+    Args:
+        count: 返す PJ の最大数。
+        pattern: フルコマンドに対する部分一致(大文字小文字無視)。合計の前に掛かる。
+        order: 並べる基準。"mem" または "cpu"。
+
+    Returns:
+        (PJ 別の ProcessGroup のリスト, PJ 不明の合計(無ければ None), top の生出力)。
+    """
+    processes, _, raw = _scan_all(pattern, order)
+    processes = _with_origins(processes)
+    known = [p for p in processes if p.origin is not None]
+    unknown = [p for p in processes if p.origin is None]
+    projects = group.bucket_processes(
+        known, lambda p: origin.label(p.origin) if p.origin else "-", order
+    )
+    unknown_total = group.bucket_processes(unknown, lambda p: "-", order)
+    return projects[:count], (unknown_total[0] if unknown_total else None), raw
+
+
+def _scan_all(
+    pattern: str | None, order: str
+) -> tuple[list[Process], dict[int, PsEntry], str]:
+    """全プロセスを走査する(--group / --project の母集団)。
+
+    Args:
+        pattern: フルコマンドに対する部分一致(大文字小文字無視)。None なら全件対象。
+        order: top の並び順。
+
+    Returns:
+        (Process のリスト, ps のスナップショット, top の生出力)。
+    """
     snapshot = parse.parse_ps_snapshot(collect.ps_snapshot())
     raw = collect.top_sample(
         max(len(snapshot) + GROUP_SAMPLE_MARGIN, GROUP_SAMPLE_MIN), order
@@ -131,7 +174,7 @@ def build_groups(
                 command=entry.command,
             )
         )
-    return group.group_processes(processes, snapshot, order)[:count], raw
+    return processes, snapshot, raw
 
 
 def build_app_processes(
@@ -191,19 +234,34 @@ def _annotate(processes: list[Process]) -> list[Process]:
     """
     if not processes:
         return processes
-    pids = [p.pid for p in processes]
-    cwds = parse.parse_lsof_cwd(collect.process_cwds(pids))
-    labels = parse.parse_launchctl_list(collect.launchd_jobs())
-    elapsed = parse.parse_ps_etime(collect.process_elapsed(pids))
+    elapsed = parse.parse_ps_etime(collect.process_elapsed([p.pid for p in processes]))
     now = _now()
     return [
         replace(
             p,
-            origin=origin.resolve(cwds.get(p.pid), labels.get(p.pid)),
             started_at=(
                 now - timedelta(seconds=elapsed[p.pid]) if p.pid in elapsed else None
             ),
         )
+        for p in _with_origins(processes)
+    ]
+
+
+def _with_origins(processes: list[Process]) -> list[Process]:
+    """プロセスに由来(PJ)を付ける。lsof / launchctl は対象の数によらず 1 回ずつ。
+
+    Args:
+        processes: 対象プロセス。
+
+    Returns:
+        origin を埋めたプロセス(順序は保つ)。
+    """
+    if not processes:
+        return processes
+    cwds = parse.parse_lsof_cwd(collect.process_cwds([p.pid for p in processes]))
+    labels = parse.parse_launchctl_list(collect.launchd_jobs())
+    return [
+        replace(p, origin=origin.resolve(cwds.get(p.pid), labels.get(p.pid)))
         for p in processes
     ]
 

@@ -76,6 +76,7 @@ memhog -n 30           # 上位30件
 memhog -g python       # フルコマンドに "python" を含むものだけ
 memhog --group         # アプリ単位に合算（ヘルパーへ分散して埋もれるものを炙り出す）
 memhog --app ixBrowser # そのアプリの内訳（--group の APP 名を指定）
+memhog --project       # プロジェクト（git リポ / launchd ジョブ）ごとに合算。どの PJ が一番食っているか
 memhog --json          # 機械可読 JSON（他スクリプト/通知連携/定期実行向け）
 memhog --watch 2       # 2秒ごとに更新し続ける監視モード（Ctrl-C で終了）
 memhog --kill          # 一覧から PID を選んで停止（既定で確認、不可逆操作）

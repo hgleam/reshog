@@ -36,6 +36,7 @@ cpu_app = _build_app("cpuhog", "cpu", _CPU_HELP)
 | `--json` | | `False` | 機械可読な JSON で出力 |
 | `--group` | | `False` | プロセス単位でなくアプリ単位に合算して表示 |
 | `--app` | | なし | 指定したアプリ名に属するプロセスだけを一覧（`--group` の内訳） |
+| `--project` | | `False` | プロジェクト（git リポ / launchd ジョブ）ごとに合算して表示 |
 | `--watch` | | なし | 指定秒間隔で画面を更新し続ける（監視モード） |
 | `--kill` | | `False` | 一覧から PID を選んで停止 |
 | `--force` | | `False` | `--kill` 時に SIGKILL を使う（既定は SIGTERM） |
@@ -70,3 +71,7 @@ cpu_app = _build_app("cpuhog", "cpu", _CPU_HELP)
   ロケールで変わるため使わない。
 - `--group --json`: `render.build_group_json` の出力（`system` と `groups[]`。各要素は
   `label` / `total_mb` / `count` / `hidden_gpu` / `largest{pid, mem_mb, command}`）。
+- `--project --json`: 同じ関数（`kind="project"`）の出力。`groups[]` の代わりに `projects[]`
+  （各要素の形は `groups[]` と同じ）と、`unknown`（PJ 不明の `{total_mb, total_cpu, count}` か `null`）。
+- `--project` は `--group` / `--app` / `--kill` と**併用不可**（code 1）。合計の束ね方は 1 つしか
+  選べず、停止対象は PID で選ぶため。表の下の提案は出さない（`--app` は APP 名しか受け取らない）。
