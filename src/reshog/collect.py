@@ -95,6 +95,48 @@ def ps_snapshot() -> str:
     return _run(["ps", "-Ao", "pid=,ppid=,rss=,command="])
 
 
+def process_cwds(pids: list[int]) -> str:
+    """PID 群の作業ディレクトリを 1 回の lsof で返す。
+
+    PID ごとに叩くと表示件数に比例して遅くなるため、カンマ区切りでまとめて渡す。
+    読めない PID(root のプロセス等)は出力に現れない。
+
+    Args:
+        pids: 対象 PID。空なら何も実行しない(-p を空で渡すと全プロセスを列挙するため)。
+
+    Returns:
+        `lsof -a -d cwd -p <pids> -Fpn` の標準出力。取得できなければ空文字。
+    """
+    if not pids:
+        return ""
+    return _run(["lsof", "-a", "-d", "cwd", "-p", ",".join(map(str, pids)), "-Fpn"])
+
+
+def process_elapsed(pids: list[int]) -> str:
+    """PID 群の経過時間を 1 回の ps で返す。
+
+    開始時刻そのもの(lstart)は曜日・月名がロケールで変わるため、数字だけの etime を取る。
+
+    Args:
+        pids: 対象 PID。空なら何も実行しない(-p を空で渡すと ps がエラーになるため)。
+
+    Returns:
+        `ps -o pid=,etime= -p <pids>` の標準出力。取得できなければ空文字。
+    """
+    if not pids:
+        return ""
+    return _run(["ps", "-o", "pid=,etime=", "-p", ",".join(map(str, pids))])
+
+
+def launchd_jobs() -> str:
+    """ログインユーザーの launchd ジョブ一覧を返す。
+
+    Returns:
+        `launchctl list` の標準出力。取得できなければ空文字。
+    """
+    return _run(["launchctl", "list"])
+
+
 def swap_usage() -> str:
     """sysctl vm.swapusage の値を返す。
 

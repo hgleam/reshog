@@ -55,11 +55,15 @@ $ cpuhog --group
   空き: 37%
 
   実メモリ上位 (物理フットプリント = Activity モニタ「メモリ」相当)
-    #    MEM   psRSS  %CPU    PID  COMMAND
-    1  32.0G     26M   0.0  28632  .../Python main.py --port 8188  ⚠ GPU/Metal常駐(psに出ない)
-    2   7.9G    2.6G   0.0  69624  com.apple.Virtualization.VirtualMachine
-    3   6.6G     12M   0.0  29473  llama-server ...              ⚠ GPU/Metal常駐(psに出ない)
+    #    MEM   psRSS  %CPU    PID         起動  PJ              COMMAND
+    1  32.0G     26M   0.0  28632  09-28 09:12  ComfyUI         .../Python main.py --port 8188  ⚠ GPU/Metal常駐(psに出ない)
+    2   7.9G    2.6G   0.0  69624  09-25 18:45  -               com.apple.Virtualization.VirtualMachine
+    3   6.6G     12M   0.0  29473  09-28 10:42  tokyo-calendar  llama-server ...              ⚠ GPU/Metal常駐(psに出ない)
 ```
+
+**起動**はプロセスの開始時刻、**PJ** はどのプロジェクトから動いているか。PJ は作業ディレクトリの
+git リポ名（worktree なら元のリポ名）、リポの外で動く常駐ジョブは `launchd:<ジョブ名>`、
+どちらも分からないもの（GUI アプリ・root のプロセス等）は `-`。
 
 合計は共有メモリの重複計上を含みうる**上限寄りの推定値**で、順位付けのための指標。
 内訳は `memhog --app '<APP名>'` で開く。

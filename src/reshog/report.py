@@ -1,6 +1,9 @@
 """collect と parse を組み合わせ、プロセス一覧とシステム状況を構築する。"""
 
-from . import collect, group, parse
+from dataclasses import replace
+from datetime import datetime, timedelta
+
+from . import collect, group, origin, parse
 from .models import Process, ProcessGroup, SystemCpu, SystemMemory
 
 # --group は「分散して埋もれているアプリ」を探すのが目的なので、全プロセスを走査する。
@@ -52,7 +55,7 @@ def build_processes(
         )
         if len(result) >= count:
             break
-    return result, raw
+    return _annotate(result), raw
 
 
 def build_system_memory(top_raw: str) -> SystemMemory:
@@ -171,4 +174,40 @@ def build_app_processes(
         )
         if len(result) >= count:
             break
-    return result, raw
+    return _annotate(result), raw
+
+
+def _annotate(processes: list[Process]) -> list[Process]:
+    """表示するプロセスに由来(PJ)と開始時刻を付ける。
+
+    外部コマンドは表示する分だけを対象に、それぞれ 1 回ずつしか叩かない
+    (PID ごとに叩くと表示件数に比例して遅くなる)。
+
+    Args:
+        processes: 表示するプロセス。
+
+    Returns:
+        origin / started_at を埋めたプロセス(順序は保つ)。
+    """
+    if not processes:
+        return processes
+    pids = [p.pid for p in processes]
+    cwds = parse.parse_lsof_cwd(collect.process_cwds(pids))
+    labels = parse.parse_launchctl_list(collect.launchd_jobs())
+    elapsed = parse.parse_ps_etime(collect.process_elapsed(pids))
+    now = _now()
+    return [
+        replace(
+            p,
+            origin=origin.resolve(cwds.get(p.pid), labels.get(p.pid)),
+            started_at=(
+                now - timedelta(seconds=elapsed[p.pid]) if p.pid in elapsed else None
+            ),
+        )
+        for p in processes
+    ]
+
+
+def _now() -> datetime:
+    """開始時刻の基準にする現在時刻(テストで差し替える)。"""
+    return datetime.now().replace(microsecond=0)

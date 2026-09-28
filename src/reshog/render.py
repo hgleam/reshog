@@ -2,13 +2,14 @@
 
 import json
 import shlex
+from datetime import datetime
 
 from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 from rich.text import Text
 
-from .models import COMMAND_BY_SORT, Process, ProcessGroup, SystemCpu, SystemMemory
+from .models import COMMAND_BY_SORT, Origin, Process, ProcessGroup, SystemCpu, SystemMemory
 
 _MAX_CMD = 96
 
@@ -26,6 +27,26 @@ def _shorten(command: str) -> str:
         渡す際は必ず `escape()` を通すこと(マークアップとして解釈させない)。
     """
     return command if len(command) <= _MAX_CMD else command[: _MAX_CMD - 3] + "..."
+
+
+def _origin_text(found: Origin | None) -> Text:
+    """PJ 列のセルを作る。
+
+    リポ名とジョブ名は別物なので、ジョブ名には `launchd:` を付けて見分けられるようにする。
+    どちらも他プロセス由来の文字列だが、Text に入れるのでマークアップとしては解釈されない。
+    """
+    if found is None:
+        return Text("-", style="dim")
+    if found.kind == "launchd":
+        return Text(f"launchd:{found.name}", style="dim")
+    return Text(found.name)
+
+
+def _started_text(started_at: datetime | None) -> Text:
+    """起動列のセルを作る。桁を揃えるため、今日のものも日付から出す。"""
+    if started_at is None:
+        return Text("-", style="dim")
+    return Text(started_at.strftime("%m-%d %H:%M"))
 
 
 def format_mb(mb: float) -> str:
@@ -120,6 +141,8 @@ def render_table(
     table.add_column("psRSS", justify="right")
     table.add_column("%CPU", justify="right")
     table.add_column("PID", justify="right")
+    table.add_column("起動", justify="right")
+    table.add_column("PJ")
     table.add_column("COMMAND")
 
     for rank, p in enumerate(processes, start=1):
@@ -134,6 +157,8 @@ def render_table(
             format_mb(p.rss_mb),
             f"{p.cpu:g}",
             str(p.pid),
+            _started_text(p.started_at),
+            _origin_text(p.origin),
             cmd,
             style=row_style,
         )
@@ -176,6 +201,12 @@ def build_json(processes: list[Process], system: SystemMemory, cpu: SystemCpu) -
                 "rss_mb": p.rss_mb,
                 "cpu": p.cpu,
                 "hidden_gpu": p.hidden_gpu,
+                "origin": (
+                    {"kind": p.origin.kind, "name": p.origin.name} if p.origin else None
+                ),
+                "started_at": (
+                    p.started_at.isoformat(timespec="seconds") if p.started_at else None
+                ),
                 "command": p.command,
             }
             for rank, p in enumerate(processes, start=1)

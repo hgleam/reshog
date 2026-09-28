@@ -12,3 +12,8 @@ build/
 
 # Claude Code セッション由来の生成物
 .claude/voice-name.txt
+
+# worktree（隔離した作業ツリー）
+.claude/worktrees/
+.claude/.unwired-guard-notified
+.claude/.awaiting-approval

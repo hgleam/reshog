@@ -1,6 +1,8 @@
 """reshog のドメインモデル。"""
 
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Literal
 
 # GPU/Metal 常駐(ps に出ない)判定のしきい値
 HIDDEN_GPU_MIN_MB = 2000
@@ -15,6 +17,19 @@ COMMAND_BY_SORT: dict[str, str] = {"mem": "memhog", "cpu": "cpuhog"}
 
 
 @dataclass(frozen=True)
+class Origin:
+    """プロセスがどのプロジェクトから動いているか。
+
+    Attributes:
+        kind: 判定の根拠。"git"(作業ディレクトリのリポ名) / "launchd"(常駐ジョブ名)。
+        name: リポ名またはジョブ名。
+    """
+
+    kind: Literal["git", "launchd"]
+    name: str
+
+
+@dataclass(frozen=True)
 class Process:
     """1 プロセスのメモリ実態。
 
@@ -24,6 +39,8 @@ class Process:
         rss_mb: ps の RSS(MB)。Metal/MPS(GPU 共有メモリ)を数えないため過小に出る。
         cpu: CPU 使用率(%)。
         command: フルコマンド文字列。
+        origin: 由来のプロジェクト。判別できなければ None(GUI アプリ・root のプロセス等)。
+        started_at: 開始時刻(ローカル時刻)。取れなければ None(直前に終了した等)。
     """
 
     pid: int
@@ -31,6 +48,8 @@ class Process:
     rss_mb: int
     cpu: float
     command: str
+    origin: Origin | None = None
+    started_at: datetime | None = None
 
     @property
     def hidden_gpu(self) -> bool:
