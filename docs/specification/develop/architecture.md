@@ -7,9 +7,10 @@
 
 | モジュール | 役割 | 副作用 |
 |-----------|------|--------|
-| `collect.py` | `top` / `ps` / `sysctl` / `memory_pressure` を叩く薄い I/O 層。プロセス停止（`send_signal` = `os.kill`）・自 PID 取得（`current_pid`）もここに集約 | あり（subprocess / os.kill） |
+| `collect.py` | `top` / `ps` / `sysctl` / `memory_pressure` / `lsof` / `launchctl` を叩く薄い I/O 層。プロセス停止（`send_signal` = `os.kill`）・自 PID 取得（`current_pid`）もここに集約 | あり（subprocess / os.kill） |
 | `parse.py` | top・memory_pressure の出力を解析する純粋関数群 | なし |
 | `models.py` | ドメインモデル（`Process` / `PsEntry` / `ProcessGroup` / `SystemMemory`）と判定ロジック | なし |
+| `origin.py` | 作業ディレクトリ・launchd ジョブ名から由来（`Origin`）を決める（`repo_root` / `resolve`）。worktree は `.git` ファイルの gitdir をたどって本体のリポへ寄せる | あり（ファイルシステムの読み取りのみ） |
 | `group.py` | プロセスをアプリ単位へ集約する純粋関数群（`app_label` / `group_label` / `group_processes`） | なし |
 | `report.py` | `collect` × `parse` を組み合わせて一覧・システム状況を構築 | あり（collect 経由） |
 | `render.py` | `Process` / `SystemMemory` を表 / JSON に整形（`format_mb` 等の整形関数もここ） | なし（出力のみ） |
@@ -23,7 +24,12 @@ cli.main
        ├─ collect.top_sample(sample_count)          # top ワンショット
        ├─ parse.parse_top_processes(raw)            # (pid, mem_mb, cpu) 抽出
        ├─ collect.ps_command(pid)                   # フルコマンド
-       └─ collect.ps_rss_mb(pid)                    # ps RSS(MB)
+       ├─ collect.ps_rss_mb(pid)                    # ps RSS(MB)
+       └─ report._annotate(processes)               # 表示分だけに PJ・起動を付ける
+            ├─ collect.process_cwds(pids)           # lsof -a -d cwd -p <pids> -Fpn（1 回）
+            ├─ collect.launchd_jobs()               # launchctl list（1 回）
+            ├─ collect.process_elapsed(pids)        # ps -o pid=,etime=（1 回）
+            └─ origin.resolve(cwd, label)           # git リポ名 → launchd ジョブ名 → None
      → list[Process], top の生出力
   └─ report.build_system_memory(top_raw)
        ├─ parse.parse_phys_mem(top_raw)             # PhysMem 行（top 生出力を再利用）

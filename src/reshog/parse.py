@@ -187,3 +187,83 @@ def parse_ps_snapshot(output: str) -> dict[int, PsEntry]:
             command=command.strip(),
         )
     return entries
+
+
+def parse_lsof_cwd(output: str) -> dict[int, str]:
+    """`lsof -a -d cwd -p <pids> -Fpn` の出力を PID -> 作業ディレクトリにする。
+
+    -F 形式は 1 行 1 項目で、先頭 1 文字が種別(p=PID / f=fd / n=パス)。パスは
+    行の残り全部なので空白を含んでもそのまま取れる。
+
+    Args:
+        output: lsof の標準出力全体。
+
+    Returns:
+        pid -> 作業ディレクトリ。読めなかった PID は含まない。
+    """
+    cwds: dict[int, str] = {}
+    pid: int | None = None
+    for line in output.splitlines():
+        if line.startswith("p") and line[1:].isdigit():
+            pid = int(line[1:])
+        elif line.startswith("n") and pid is not None:
+            cwds[pid] = line[1:]
+    return cwds
+
+
+def parse_launchctl_list(output: str) -> dict[int, str]:
+    """`launchctl list` の出力を、動いているジョブの PID -> ラベルにする。
+
+    Args:
+        output: launchctl list の標準出力全体(PID / Status / Label のタブ区切り)。
+
+    Returns:
+        pid -> ラベル。止まっているジョブ(PID が "-")と見出し行は含まない。
+    """
+    labels: dict[int, str] = {}
+    for line in output.splitlines():
+        parts = line.split("\t")
+        if len(parts) == 3 and parts[0].isdigit():
+            labels[int(parts[0])] = parts[2]
+    return labels
+
+
+def parse_etime_seconds(value: str) -> int | None:
+    """ps の etime(`[[dd-]hh:]mm:ss`)を秒にする。
+
+    Args:
+        value: etime の値("21:20:22" / "3-01:02:03" 等)。
+
+    Returns:
+        経過秒数。解釈できなければ None。
+    """
+    days_part, _, clock = value.strip().rpartition("-")
+    fields = clock.split(":")
+    if not 2 <= len(fields) <= 3 or not all(f.isdigit() for f in fields):
+        return None
+    if days_part and not days_part.isdigit():
+        return None
+    seconds = 0
+    for field in fields:
+        seconds = seconds * 60 + int(field)
+    return seconds + int(days_part or 0) * 86400
+
+
+def parse_ps_etime(output: str) -> dict[int, int]:
+    """`ps -o pid=,etime=` の出力を PID -> 経過秒数にする。
+
+    Args:
+        output: ps の標準出力全体。
+
+    Returns:
+        pid -> 経過秒数。解釈できない行は捨てる。
+    """
+    elapsed: dict[int, int] = {}
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) != 2 or not parts[0].isdigit():
+            continue
+        seconds = parse_etime_seconds(parts[1])
+        if seconds is not None:
+            elapsed[int(parts[0])] = seconds
+    return elapsed

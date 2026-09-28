@@ -64,5 +64,9 @@ cpu_app = _build_app("cpuhog", "cpu", _CPU_HELP)
 - `--group` の `-n` は「表示するグループ数」、`-g` は**合算前**のプロセスに掛かる
   （一致したプロセスだけが合計に入る）。この場合は部分合計であることを表の見出しに出す。`--watch` とは併用可。
 - `--json`: `render.build_json` の出力（`system` と `processes[]`、各要素に `hidden_gpu` を含む）。
+  各要素の `origin` は `{"kind": "git" | "launchd", "name": ...}` か `null`、`started_at` は
+  ローカル時刻の ISO 8601（秒まで）か `null`。
+- 開始時刻は `ps` の `etime`（経過時間）から「いま − 経過」で出す。`lstart` は曜日・月名が
+  ロケールで変わるため使わない。
 - `--group --json`: `render.build_group_json` の出力（`system` と `groups[]`。各要素は
   `label` / `total_mb` / `count` / `hidden_gpu` / `largest{pid, mem_mb, command}`）。

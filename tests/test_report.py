@@ -36,6 +36,10 @@ def _mock_collect(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(collect, "ps_snapshot", lambda: PS_SNAPSHOT)
     monkeypatch.setattr(collect, "swap_usage", lambda: "total = 32768.00M  used = 31855.94M")
     monkeypatch.setattr(collect, "memory_pressure", lambda: "free percentage: 37%\n")
+    # PJ 列・起動列の材料。実マシンのプロセスを引かせない(中身は test_origin / test_started)。
+    monkeypatch.setattr(collect, "process_cwds", lambda pids: "")
+    monkeypatch.setattr(collect, "launchd_jobs", lambda: "")
+    monkeypatch.setattr(collect, "process_elapsed", lambda pids: "")
 
 
 class TestBuildProcesses:
