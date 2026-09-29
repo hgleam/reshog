@@ -50,7 +50,10 @@ def test_views_are_built_in_one_place() -> None:
 
 
 def test_render_functions_do_not_branch_on_view_kind() -> None:
-    """アプリ別と PJ 別の表を 1 関数の `kind` 引数で描き分けない(見出し・列・提案が全部分岐する)。"""
+    """アプリ別と PJ 別の表を 1 関数の `kind` 引数で描き分けない。
+
+    見出し・列・提案が全部分岐し、1 関数の複雑度が膨らむ(#16 で 15 になった)。
+    """
     tree = _tree("render.py")
     params = {
         a.arg
