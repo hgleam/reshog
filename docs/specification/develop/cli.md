@@ -70,7 +70,9 @@ cpu_app = _build_app("cpuhog", "cpu", CPU_HELP)
   （一致したプロセスだけが合計に入る）。この場合は部分合計であることを表の見出しに出す。`--watch` とは併用可。
 - `--json`: `render.build_json` の出力（`system` と `processes[]`、各要素に `hidden_gpu` を含む）。
   各要素の `origin` は `{"kind": "git" | "launchd", "name": ...}` か `null`、`started_at` は
-  ローカル時刻の ISO 8601（秒まで）か `null`。
+  ローカル時刻の ISO 8601（秒まで）か `null`。`launchd_job` は面倒を見ている launchd のジョブ名か `null`。
+- 停止の案内は `render.stop_command(process)` が唯一の正本（表の下の案内と `--kill` の警告の両方が使う）。
+  launchd のジョブなら `launchctl bootout gui/$(id -u)/<shlex.quote したラベル>`、それ以外は `kill <PID>`。
 - 開始時刻は `ps` の `etime`（経過時間）から「いま − 経過」で出す。`lstart` は曜日・月名が
   ロケールで変わるため使わない。
 - `--group --json`: `render.build_group_json` の出力（`system` と `groups[]`。各要素は

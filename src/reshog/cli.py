@@ -19,6 +19,7 @@ from collections.abc import Callable
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 
 from . import __version__, control, render, report
 from .constants import COMMAND_BY_SORT, CPU_HELP, MEM_HELP
@@ -68,6 +69,13 @@ def _kill_process(
 
     sig = signal.SIGKILL if force else signal.SIGTERM
     console.print(f"[dim]{label}[/dim]")
+    if target is not None and target.launchd_job:
+        # 止める手段は奪わない(確認すれば送る)。ただし効かない可能性と、効く手段を先に見せる。
+        console.print(
+            f"[yellow]launchd のジョブ {escape(target.launchd_job)} です。"
+            "kill しても起動し直されることがあります。[/yellow]\n"
+            f"  ジョブごと止めるなら:  [bold]{escape(render.stop_command(target))}[/bold]"
+        )
     if not assume_yes and not typer.confirm(
         f"PID {pid} を {sig.name} で停止します。よいですか?"
     ):

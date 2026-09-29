@@ -85,6 +85,24 @@ def resolve(cwd: str | None, launchd_label: str | None) -> Origin | None:
     root = repo_root(cwd) if cwd else None
     if root is not None:
         return Origin(kind="git", name=root.name)
+    job = launchd_job(launchd_label)
+    if job is not None:
+        return Origin(kind="launchd", name=job)
+    return None
+
+
+def launchd_job(launchd_label: str | None) -> str | None:
+    """launchd が面倒を見ている常駐ジョブのラベル(GUI アプリの自動ラベルは除く)。
+
+    PJ 列とは別の事実。作業ディレクトリがリポの中でも、launchd のジョブなら kill しても
+    起動し直されうる(KeepAlive)。止める案内はこの値で決める。
+
+    Args:
+        launchd_label: launchctl list のラベル。ジョブでなければ None。
+
+    Returns:
+        ジョブのラベル。ジョブでない・GUI アプリなら None。
+    """
     if launchd_label and not launchd_label.startswith(GUI_APP_LABEL_PREFIX):
-        return Origin(kind="launchd", name=launchd_label)
+        return launchd_label
     return None
