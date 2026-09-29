@@ -12,7 +12,7 @@
 | `parse.py` | top・memory_pressure の出力を解析する純粋関数群 | なし |
 | `models.py` | 型の置き場。ドメインモデル（`Process` / `PsEntry` / `ProcessGroup` / `SystemMemory` / `Origin`）・表示の種類（`View`）と判定ロジック | なし |
 | `constants.py` | 定数の唯一の置き場（しきい値・コマンド名・`--help` の説明文）。実装のファイル・型の置き場には定数を置かない | なし |
-| `origin.py` | 作業ディレクトリ・launchd ジョブ名から由来（`Origin`）を決める（`repo_root` / `resolve`）と、面倒を見ている launchd のジョブ名（`launchd_job`。`Process.launchd_job` に入り、止め方の案内に使う）。worktree は `.git` ファイルの gitdir をたどって本体のリポへ寄せる | あり（ファイルシステムの読み取りのみ） |
+| `origin.py` | 作業ディレクトリ・launchd ジョブ名から由来（`Origin`）を決める（`repo_root` / `resolve`）と、止めるときに bootout へ渡すサービス名（`launchd_service`。`<ドメイン>/<ラベル>`。GUI アプリの自動ラベルと `com.apple.*` は除く。`Process.launchd_service` に入り、止め方の案内に使う）。worktree は `.git` ファイルの gitdir をたどって本体のリポへ寄せる | あり（ファイルシステムの読み取りのみ） |
 | `group.py` | アプリ名の決め方（`app_label` / `group_label`）と、それをキーにしたアプリ別の集約（`group_processes`） | なし |
 | `aggregate.py` | プロセスを名前で束ねて合計し順位を付ける（`bucket_processes`）。アプリ別・PJ 別で共有 | なし |
 | `report.py` | `collect` × `parse` を組み合わせて一覧・システム状況を構築 | あり（collect 経由） |
@@ -30,7 +30,7 @@ cli.main
        ├─ collect.ps_rss_mb(pid)                    # ps RSS(MB)
        └─ report._annotate(processes)               # 表示分だけに PJ・起動を付ける
             ├─ collect.process_cwds(pids)           # lsof -a -d cwd -p <pids> -Fpn（1 回）
-            ├─ collect.launchd_jobs()               # launchctl list（1 回）
+            ├─ collect.launchd_jobs()               # launchctl list（1 回。ドメインは collect.launchd_domain）
             ├─ collect.process_elapsed(pids)        # ps -o pid=,etime=（1 回）
             └─ origin.resolve(cwd, label)           # git リポ名 → launchd ジョブ名 → None
      → list[Process], top の生出力

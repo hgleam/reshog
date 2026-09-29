@@ -6,7 +6,7 @@
 
 from pathlib import Path
 
-from .constants import GUI_APP_LABEL_PREFIX
+from .constants import APPLE_LABEL_PREFIX, GUI_APP_LABEL_PREFIX
 from .models import Origin
 
 
@@ -85,24 +85,24 @@ def resolve(cwd: str | None, launchd_label: str | None) -> Origin | None:
     root = repo_root(cwd) if cwd else None
     if root is not None:
         return Origin(kind="git", name=root.name)
-    job = launchd_job(launchd_label)
-    if job is not None:
-        return Origin(kind="launchd", name=job)
+    if launchd_label and not launchd_label.startswith(GUI_APP_LABEL_PREFIX):
+        return Origin(kind="launchd", name=launchd_label)
     return None
 
 
-def launchd_job(launchd_label: str | None) -> str | None:
-    """launchd が面倒を見ている常駐ジョブのラベル(GUI アプリの自動ラベルは除く)。
+def launchd_service(launchd_label: str | None, domain: str) -> str | None:
+    """止めるときに launchctl bootout へ渡すサービス名(`<ドメイン>/<ラベル>`)。
 
     PJ 列とは別の事実。作業ディレクトリがリポの中でも、launchd のジョブなら kill しても
     起動し直されうる(KeepAlive)。止める案内はこの値で決める。
 
     Args:
         launchd_label: launchctl list のラベル。ジョブでなければ None。
+        domain: そのラベルを読んだドメイン("gui/<uid>" または "system")。
 
     Returns:
-        ジョブのラベル。ジョブでない・GUI アプリなら None。
+        サービス名。ジョブでない・GUI アプリ・OS のエージェントなら None(kill を案内する)。
     """
-    if launchd_label and not launchd_label.startswith(GUI_APP_LABEL_PREFIX):
-        return launchd_label
-    return None
+    if not launchd_label or launchd_label.startswith((GUI_APP_LABEL_PREFIX, APPLE_LABEL_PREFIX)):
+        return None
+    return f"{domain}/{launchd_label}"

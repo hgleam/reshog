@@ -45,16 +45,16 @@ def stop_command(process: Process) -> str:
     """そのプロセスを止めるために打つコマンド(貼り付けてそのまま実行できる形)。
 
     launchd のジョブは kill しても KeepAlive で起動し直されるので、ジョブごと降ろす。
-    ラベルは他プロセス由来の文字列なので shell quote する(`$(id -u)` は展開させる)。
+    サービス名はラベル(他プロセス由来の文字列)を含むので shell quote する。
 
     Args:
         process: 対象プロセス。
 
     Returns:
-        `launchctl bootout gui/$(id -u)/<label>` または `kill <PID>`。
+        `launchctl bootout <ドメイン>/<ラベル>` または `kill <PID>`。
     """
-    if process.launchd_job:
-        return f"launchctl bootout gui/$(id -u)/{shlex.quote(process.launchd_job)}"
+    if process.launchd_service:
+        return f"launchctl bootout {shlex.quote(process.launchd_service)}"
     return f"kill {process.pid}"
 
 
@@ -186,10 +186,11 @@ def render_table(
             f"  停止するなら:  [bold]{COMMAND_BY_SORT[order]} --kill[/bold]"
             f"  または  [bold]{escape(stop_command(top))}[/bold]"
         )
-        if top.launchd_job:
+        if top.launchd_service:
+            domain = top.launchd_service.rsplit("/", 1)[0]
             console.print(
                 "  [dim]launchd の常駐ジョブなので、kill しても起動し直されることがある"
-                "(戻すときは launchctl bootstrap)[/dim]"
+                f"(戻すときは launchctl bootstrap {escape(domain)} <plist のパス>)[/dim]"
             )
     console.print()
 
@@ -218,7 +219,7 @@ def build_json(processes: list[Process], system: SystemMemory, cpu: SystemCpu) -
                 "origin": (
                     {"kind": p.origin.kind, "name": p.origin.name} if p.origin else None
                 ),
-                "launchd_job": p.launchd_job,
+                "launchd_service": p.launchd_service,
                 "started_at": (
                     p.started_at.isoformat(timespec="seconds") if p.started_at else None
                 ),

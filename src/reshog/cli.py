@@ -69,10 +69,10 @@ def _kill_process(
 
     sig = signal.SIGKILL if force else signal.SIGTERM
     console.print(f"[dim]{label}[/dim]")
-    if target is not None and target.launchd_job:
+    if target is not None and target.launchd_service:
         # 止める手段は奪わない(確認すれば送る)。ただし効かない可能性と、効く手段を先に見せる。
         console.print(
-            f"[yellow]launchd のジョブ {escape(target.launchd_job)} です。"
+            f"[yellow]launchd のジョブ {escape(target.launchd_service)} です。"
             "kill しても起動し直されることがあります。[/yellow]\n"
             f"  ジョブごと止めるなら:  [bold]{escape(render.stop_command(target))}[/bold]"
         )

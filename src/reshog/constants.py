@@ -91,6 +91,10 @@ TRANSPARENT = frozenset(
 # COMMAND 列と同じことしか言わないので、由来としては出さない。
 GUI_APP_LABEL_PREFIX = "application."
 
+# OS のエージェント。bootout はジョブを台帳から外すので、勧めると再ログインまで機能が欠ける。
+# 止め方の案内(launchd_service)からは外し、kill を案内する(PJ 列の表示はそのまま)。
+APPLE_LABEL_PREFIX = "com.apple."
+
 
 # --- 全プロセス走査の幅(report.py) ---
 
