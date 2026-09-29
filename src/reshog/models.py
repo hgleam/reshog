@@ -35,6 +35,9 @@ class Process:
         command: フルコマンド文字列。
         origin: 由来のプロジェクト。判別できなければ None(GUI アプリ・root のプロセス等)。
         started_at: 開始時刻(ローカル時刻)。取れなければ None(直前に終了した等)。
+        launchd_service: 面倒を見ている launchd のサービス名(`gui/<uid>/<ラベル>` 等)。
+            ジョブでなければ None。KeepAlive のジョブは kill しても起動し直されるので、
+            止め方の案内が変わる。
     """
 
     pid: int
@@ -44,6 +47,7 @@ class Process:
     command: str
     origin: Origin | None = None
     started_at: datetime | None = None
+    launchd_service: str | None = None
 
     @property
     def hidden_gpu(self) -> bool:

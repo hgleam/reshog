@@ -6,7 +6,7 @@
 
 from pathlib import Path
 
-from .constants import GUI_APP_LABEL_PREFIX
+from .constants import APPLE_LABEL_PREFIX, GUI_APP_LABEL_PREFIX, LAUNCHD_DOMAIN_RE
 from .models import Origin
 
 
@@ -85,6 +85,46 @@ def resolve(cwd: str | None, launchd_label: str | None) -> Origin | None:
     root = repo_root(cwd) if cwd else None
     if root is not None:
         return Origin(kind="git", name=root.name)
-    if launchd_label and not launchd_label.startswith(GUI_APP_LABEL_PREFIX):
+    if launchd_label and not _is_gui_app(launchd_label):
         return Origin(kind="launchd", name=launchd_label)
     return None
+
+
+def _is_gui_app(launchd_label: str) -> bool:
+    """GUI アプリを起動したときに launchd が自動で付けるラベルか(PJ 列・止め方の案内で共有)。"""
+    return launchd_label.startswith(GUI_APP_LABEL_PREFIX)
+
+
+def launchd_service(launchd_label: str | None, domain: str) -> str | None:
+    """止めるときに launchctl bootout へ渡すサービス名(`<ドメイン>/<ラベル>`)。
+
+    PJ 列とは別の事実。作業ディレクトリがリポの中でも、launchd のジョブなら kill しても
+    起動し直されうる(KeepAlive)。止める案内はこの値で決める。
+
+    Args:
+        launchd_label: launchctl list のラベル。ジョブでなければ None。
+        domain: そのラベルを読んだドメイン("gui/<uid>" または "system")。
+
+    Returns:
+        サービス名。ジョブでない・GUI アプリ・OS のエージェントなら None(kill を案内する)。
+    """
+    if not launchd_label or _is_gui_app(launchd_label):
+        return None
+    if launchd_label.startswith(APPLE_LABEL_PREFIX):
+        return None
+    return f"{domain}/{launchd_label}"
+
+
+def service_domain(service: str) -> str:
+    """サービス名(`<ドメイン>/<ラベル>`)からドメインを取り出す(launchd_service と対)。
+
+    ラベル側に / が入りうるので、最後の / で割らず、ドメインの形(system / gui/<uid>)で取る。
+
+    Args:
+        service: launchd_service が返したサービス名。
+
+    Returns:
+        ドメイン。形が合わなければ最初の / より前。
+    """
+    match = LAUNCHD_DOMAIN_RE.match(service)
+    return match.group(1) if match else service.split("/", 1)[0]

@@ -41,6 +41,23 @@ def _started_text(started_at: datetime | None) -> Text:
     return Text(started_at.strftime("%m-%d %H:%M"))
 
 
+def stop_command(process: Process) -> str:
+    """そのプロセスを止めるために打つコマンド(貼り付けてそのまま実行できる形)。
+
+    launchd のジョブは kill しても KeepAlive で起動し直されるので、ジョブごと降ろす。
+    サービス名はラベル(他プロセス由来の文字列)を含むので shell quote する。
+
+    Args:
+        process: 対象プロセス。
+
+    Returns:
+        `launchctl bootout <ドメイン>/<ラベル>` または `kill <PID>`。
+    """
+    if process.launchd_service:
+        return f"launchctl bootout {shlex.quote(process.launchd_service)}"
+    return f"kill {process.pid}"
+
+
 def format_mb(mb: float) -> str:
     """MB を人間可読(G/M)に整形する。
 
@@ -167,8 +184,14 @@ def render_table(
         # 開き直した画面の並びが変わる。
         console.print(
             f"  停止するなら:  [bold]{COMMAND_BY_SORT[order]} --kill[/bold]"
-            f"  または  [bold]kill {top.pid}[/bold]"
+            f"  または  [bold]{escape(stop_command(top))}[/bold]"
         )
+        if top.launchd_service:
+            domain = origin.service_domain(top.launchd_service)
+            console.print(
+                "  [dim]launchd の常駐ジョブなので、kill しても起動し直されることがある"
+                f"(戻すときは launchctl bootstrap {escape(domain)} <plist のパス>)[/dim]"
+            )
     console.print()
 
 
@@ -196,6 +219,7 @@ def build_json(processes: list[Process], system: SystemMemory, cpu: SystemCpu) -
                 "origin": (
                     {"kind": p.origin.kind, "name": p.origin.name} if p.origin else None
                 ),
+                "launchd_service": p.launchd_service,
                 "started_at": (
                     p.started_at.isoformat(timespec="seconds") if p.started_at else None
                 ),

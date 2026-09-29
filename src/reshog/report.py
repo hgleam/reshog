@@ -228,20 +228,27 @@ def _annotate(processes: list[Process]) -> list[Process]:
 
 
 def _with_origins(processes: list[Process]) -> list[Process]:
-    """プロセスに由来(PJ)を付ける。lsof / launchctl は対象の数によらず 1 回ずつ。
+    """プロセスに由来(PJ)と launchd のジョブ名を付ける。
+
+    lsof / launchctl は対象の数によらず 1 回ずつ叩く。
 
     Args:
         processes: 対象プロセス。
 
     Returns:
-        origin を埋めたプロセス(順序は保つ)。
+        origin / launchd_service を埋めたプロセス(順序は保つ)。
     """
     if not processes:
         return processes
     cwds = parse.parse_lsof_cwd(collect.process_cwds([p.pid for p in processes]))
     labels = parse.parse_launchctl_list(collect.launchd_jobs())
+    domain = collect.launchd_domain()
     return [
-        replace(p, origin=origin.resolve(cwds.get(p.pid), labels.get(p.pid)))
+        replace(
+            p,
+            origin=origin.resolve(cwds.get(p.pid), labels.get(p.pid)),
+            launchd_service=origin.launchd_service(labels.get(p.pid), domain),
+        )
         for p in processes
     ]
 

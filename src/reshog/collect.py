@@ -4,6 +4,7 @@
 読むだけで何も変えない。プロセスを止める副作用は control.py に置く。
 """
 
+import os
 import subprocess
 
 from .constants import TOP_SAMPLES
@@ -120,6 +121,18 @@ def process_elapsed(pids: list[int]) -> str:
     if not pids:
         return ""
     return _run(["ps", "-o", "pid=,etime=", "-p", ",".join(map(str, pids))])
+
+
+def launchd_domain() -> str:
+    """launchd_jobs が読むドメイン。root なら system、それ以外はそのユーザーの gui。
+
+    `launchctl list` は叩いた権限のドメインを返す。止める案内のドメインもこれに合わせる。
+
+    Returns:
+        "system" または "gui/<uid>"。
+    """
+    uid = os.geteuid()
+    return "system" if uid == 0 else f"gui/{uid}"
 
 
 def launchd_jobs() -> str:
