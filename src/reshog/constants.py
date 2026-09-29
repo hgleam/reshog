@@ -151,7 +151,7 @@ sys が user を大きく上回るときは、個々のプロセスの計算で�
 SPOTLIGHT_NOTE = (
     "Spotlight の索引づくり",
     (
-        "止めても害は無いが、すぐ起動し直す。"
+        "止めても害は無いが、すぐ起動し直す(mds は root で動くので止めるには管理者権限も要る)。"
         "索引が終わるのを待つか、Spotlight の設定で重いフォルダを外す"
     ),
     True,
@@ -177,7 +177,7 @@ KNOWN_PROCESSES: dict[str, tuple[str, str, bool]] = {
     "mdworker_shared": SPOTLIGHT_NOTE,
     "com.apple.Virtualization.VirtualMachine": (
         "仮想マシン(Docker Desktop 等)",
-        "止めるなら起動元のアプリ(Docker Desktop 等)を終了する",
+        "止めるなら起動元のアプリ(Docker Desktop 等)を終了する。強制終了すると中の作業が失われうる",
         True,
     ),
 }
