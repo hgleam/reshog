@@ -52,6 +52,17 @@ class TestEndpoint:
     def test_any_address_is_asked_on_loopback(self) -> None:
         assert llama.endpoint("llama-server --host 0.0.0.0 --port 8090") == ("127.0.0.1", 8090)
 
+    @pytest.mark.parametrize("host", ["::1", "[::1]"])
+    def test_ipv6_loopback_is_asked_as_ipv6(self, host: str) -> None:
+        assert llama.endpoint(f"llama-server --host {host} --port 8090") == ("[::1]", 8090)
+
+    def test_unbalanced_quote_falls_back_to_spaces(self) -> None:
+        assert llama.endpoint("/opt/it's/llama-server --port 8091") == ("127.0.0.1", 8091)
+        assert llama.endpoint("/usr/bin/llama-server --port 8091 --alias it's") == (
+            "127.0.0.1",
+            8091,
+        )
+
     def test_remote_host_is_not_asked(self) -> None:
         """他のマシンへは問い合わせない(診断のついでに外へ通信しない)。"""
         assert llama.endpoint("llama-server --host 192.168.1.5 --port 8090") is None
@@ -92,6 +103,12 @@ class TestLastTransition:
         text = "90.00.000.000 I srv  handle_sleep: server is entering sleeping state\n"
         text += "0.02.000.000 I log_info: build = 1\n"
         assert llama.last_transition(text) is None
+
+    def test_new_run_overrides_the_previous_one(self) -> None:
+        text = "90.00.000.000 I srv  handle_sleep: server is entering sleeping state\n"
+        text += "0.02.000.000 I log_info: build = 1\n"
+        text += "3.00.000.000 I srv  handle_sleep: server is exiting sleeping state\n"
+        assert llama.last_transition(text) == (False, timedelta(minutes=3))
 
     def test_no_transition(self) -> None:
         assert llama.last_transition("0.01.000.000 I log_info: build = 1\n") is None
@@ -210,3 +227,42 @@ class TestCollect:
 
     def test_read_tail_missing_file(self, tmp_path) -> None:
         assert collect.read_tail(str(tmp_path / "gone.log")) == ""
+
+
+class TestHttpGet:
+    """自分のマシンの口は、環境のプロキシ設定を通さずに読む。"""
+
+    @pytest.fixture
+    def server(self):
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        class _Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                body = b'{"is_sleeping": true}'
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args: object) -> None:
+                pass
+
+        httpd = HTTPServer(("127.0.0.1", 0), _Handler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        yield httpd.server_address[1]
+        httpd.shutdown()
+
+    def test_reads_local_endpoint(self, server: int) -> None:
+        assert collect.http_get(f"http://127.0.0.1:{server}/props") == '{"is_sleeping": true}'
+
+    def test_ignores_proxy_settings(self, server: int, monkeypatch: pytest.MonkeyPatch) -> None:
+        """http_proxy があっても自分のマシンへ直接つなぐ(プロキシ経由だと取れない・遅れる)。"""
+        for name in ("http_proxy", "HTTP_PROXY"):
+            monkeypatch.setenv(name, "http://127.0.0.1:9")
+        monkeypatch.delenv("no_proxy", raising=False)
+        monkeypatch.delenv("NO_PROXY", raising=False)
+        assert collect.http_get(f"http://127.0.0.1:{server}/props") == '{"is_sleeping": true}'
+
+    def test_refused_is_empty(self) -> None:
+        assert collect.http_get("http://127.0.0.1:9/props") == ""

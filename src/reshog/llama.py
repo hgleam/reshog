@@ -11,6 +11,7 @@ from .constants import (
     LLAMA_DEFAULT_PORT,
     LLAMA_EXECUTABLE,
     LLAMA_LOCAL_HOSTS,
+    LLAMA_LOCAL_HOSTS_V6,
     LLAMA_LOG_TIME_RE,
     LLAMA_SLEEP_ENTER,
     LLAMA_SLEEP_EXIT,
@@ -31,7 +32,8 @@ def endpoint(command: str) -> tuple[str, int] | None:
     try:
         args = shlex.split(command)
     except ValueError:
-        return None
+        # ps のコマンド行はクォートされていない。引用符の釣り合わない値(it's 等)は空白で区切る
+        args = command.split()
     if not args or args[0].rsplit("/", 1)[-1] != LLAMA_EXECUTABLE:
         return None
     host, port = "127.0.0.1", LLAMA_DEFAULT_PORT
@@ -42,6 +44,8 @@ def endpoint(command: str) -> tuple[str, int] | None:
             host = value
         elif name == "--port" and value.isdigit():
             port = int(value)
+    if host in LLAMA_LOCAL_HOSTS_V6:
+        return "[::1]", port
     if host not in LLAMA_LOCAL_HOSTS:
         return None
     return "127.0.0.1", port

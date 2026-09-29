@@ -190,7 +190,9 @@ KNOWN_PROCESSES: dict[str, tuple[str, str, bool]] = {
 LLAMA_EXECUTABLE = "llama-server"
 LLAMA_DEFAULT_PORT = 8080
 # 問い合わせてよいホスト(自分のマシン)。0.0.0.0 等の待ち受け指定は 127.0.0.1 へ問い合わせる。
-LLAMA_LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "0.0.0.0", "::1", "::"})
+LLAMA_LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "0.0.0.0"})
+# IPv6 の自分のマシン。::1 だけで待ち受けていることがあるので [::1] へ問い合わせる。
+LLAMA_LOCAL_HOSTS_V6 = frozenset({"::1", "[::1]", "::", "[::]"})
 LLAMA_PROPS_TIMEOUT_SECONDS = 1.0
 # ログは起動を重ねて数十 MB になる。末尾だけ読む(今回の起動の最後の休止の出入りが入る幅)。
 LLAMA_LOG_TAIL_BYTES = 2 * 1024 * 1024

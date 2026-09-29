@@ -134,8 +134,10 @@ def http_get(url: str) -> str:
     Returns:
         応答本文。つながらない・時間切れなら空文字(診断は続ける)。
     """
+    # 環境の http_proxy を通さない(no_proxy に 127.0.0.1 が無いと、プロキシ経由で取れない・遅れる)。
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        with urllib.request.urlopen(url, timeout=LLAMA_PROPS_TIMEOUT_SECONDS) as res:
+        with opener.open(url, timeout=LLAMA_PROPS_TIMEOUT_SECONDS) as res:
             body: bytes = res.read()
     except (urllib.error.URLError, OSError, ValueError):
         return ""
