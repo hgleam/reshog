@@ -24,6 +24,19 @@ class Origin:
 
 
 @dataclass(frozen=True)
+class LlmState:
+    """ローカル LLM サーバー(llama-server)の休止状態。
+
+    Attributes:
+        sleeping: 休止中(モデルをメモリから外している)なら True。
+        since: その状態になった時刻(ログから)。分からなければ None。
+    """
+
+    sleeping: bool
+    since: datetime | None
+
+
+@dataclass(frozen=True)
 class KnownProcess:
     """OS のプロセスの説明(何のためのものか・止めてよいか)。
 
@@ -53,6 +66,7 @@ class Process:
         launchd_service: 面倒を見ている launchd のサービス名(`gui/<uid>/<ラベル>` 等)。
             ジョブでなければ None。KeepAlive のジョブは kill しても起動し直されるので、
             止め方の案内が変わる。
+        llm_state: llama-server の休止状態。llama-server でない・問い合わせられなければ None。
     """
 
     pid: int
@@ -63,6 +77,7 @@ class Process:
     origin: Origin | None = None
     started_at: datetime | None = None
     launchd_service: str | None = None
+    llm_state: LlmState | None = None
 
     @property
     def hidden_gpu(self) -> bool:

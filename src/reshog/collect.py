@@ -6,8 +6,10 @@
 
 import os
 import subprocess
+import urllib.error
+import urllib.request
 
-from .constants import TOP_SAMPLES
+from .constants import LLAMA_LOG_TAIL_BYTES, LLAMA_PROPS_TIMEOUT_SECONDS, TOP_SAMPLES
 
 
 def _run(args: list[str]) -> str:
@@ -121,6 +123,56 @@ def process_elapsed(pids: list[int]) -> str:
     if not pids:
         return ""
     return _run(["ps", "-o", "pid=,etime=", "-p", ",".join(map(str, pids))])
+
+
+def http_get(url: str) -> str:
+    """自分のマシンの HTTP の口を読む(llama-server の /props 等)。
+
+    Args:
+        url: 問い合わせ先。
+
+    Returns:
+        応答本文。つながらない・時間切れなら空文字(診断は続ける)。
+    """
+    try:
+        with urllib.request.urlopen(url, timeout=LLAMA_PROPS_TIMEOUT_SECONDS) as res:
+            body: bytes = res.read()
+    except (urllib.error.URLError, OSError, ValueError):
+        return ""
+    return body.decode("utf-8", errors="replace")
+
+
+def launchd_print(service: str) -> str:
+    """launchd のジョブの詳細(`launchctl print <サービス名>`)。ログの場所を知るのに使う。
+
+    Args:
+        service: `gui/<uid>/<ラベル>` 等。
+
+    Returns:
+        標準出力。取得できなければ空文字。
+    """
+    return _run(["launchctl", "print", service])
+
+
+def read_tail(path: str, max_bytes: int = LLAMA_LOG_TAIL_BYTES) -> str:
+    """ファイルの末尾だけを読む(数十 MB のログを毎回読み切らない)。
+
+    Args:
+        path: ファイル。
+        max_bytes: 読む上限。
+
+    Returns:
+        末尾の max_bytes 以内の文字列。読めなければ空文字。
+    """
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            fh.seek(max(0, size - max_bytes))
+            data = fh.read(max_bytes)
+    except OSError:
+        return ""
+    return data.decode("utf-8", errors="replace")
 
 
 def launchd_domain() -> str:

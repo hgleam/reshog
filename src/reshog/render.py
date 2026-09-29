@@ -11,7 +11,7 @@ from rich.text import Text
 
 from . import known, origin
 from .constants import ALERT_CPU, ALERT_MB, COMMAND_BY_SORT, MAX_CMD
-from .models import Origin, Process, ProcessGroup, SystemCpu, SystemMemory
+from .models import LlmState, Origin, Process, ProcessGroup, SystemCpu, SystemMemory
 
 
 def _shorten(command: str) -> str:
@@ -39,6 +39,20 @@ def _started_text(started_at: datetime | None) -> Text:
     if started_at is None:
         return Text("-", style="dim")
     return Text(started_at.strftime("%m-%d %H:%M"))
+
+
+def llm_state_text(state: LlmState) -> str:
+    """llama-server の休止状態の表示(「💤 休止中(14:21 から)」「▶ 稼働中(14:14 に復帰)」)。
+
+    Args:
+        state: 休止状態。
+
+    Returns:
+        表示する文字列。その状態になった時刻が分からなければ状態だけ。
+    """
+    if state.sleeping:
+        return "💤 休止中" + (f"({state.since:%H:%M} から)" if state.since else "")
+    return "▶ 稼働中" + (f"({state.since:%H:%M} に復帰)" if state.since else "")
 
 
 def stop_command(process: Process) -> str:
@@ -164,6 +178,11 @@ def render_table(
         if about is not None:
             note = about.purpose if about.stoppable else f"{about.purpose}・止めない"
             cmd.append(f"  ⓘ {note}", style="cyan")
+        if p.llm_state is not None:
+            cmd.append(
+                f"  {llm_state_text(p.llm_state)}",
+                style="dim" if p.llm_state.sleeping else "green",
+            )
         table.add_row(
             str(rank),
             format_mb(p.mem_mb),
@@ -230,6 +249,18 @@ def build_json(processes: list[Process], system: SystemMemory, cpu: SystemCpu) -
                     {"kind": p.origin.kind, "name": p.origin.name} if p.origin else None
                 ),
                 "launchd_service": p.launchd_service,
+                "llm_state": (
+                    {
+                        "sleeping": p.llm_state.sleeping,
+                        "since": (
+                            p.llm_state.since.isoformat(timespec="seconds")
+                            if p.llm_state.since
+                            else None
+                        ),
+                    }
+                    if p.llm_state
+                    else None
+                ),
                 "started_at": (
                     p.started_at.isoformat(timespec="seconds") if p.started_at else None
                 ),

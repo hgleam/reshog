@@ -181,3 +181,20 @@ KNOWN_PROCESSES: dict[str, tuple[str, str, bool]] = {
         True,
     ),
 }
+
+
+# --- llama-server の休止状態(llama.py) ---
+
+# `--sleep-idle-seconds` の休止は同じプロセスのままモデルを外すだけで、「起動」列は変わらない。
+# 状態は /props の is_sleeping(読むだけで起こさない。2026-09-29 に実測)、時刻はログから取る。
+LLAMA_EXECUTABLE = "llama-server"
+LLAMA_DEFAULT_PORT = 8080
+# 問い合わせてよいホスト(自分のマシン)。0.0.0.0 等の待ち受け指定は 127.0.0.1 へ問い合わせる。
+LLAMA_LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "0.0.0.0", "::1", "::"})
+LLAMA_PROPS_TIMEOUT_SECONDS = 1.0
+# ログは起動を重ねて数十 MB になる。末尾だけ読む(今回の起動の最後の休止の出入りが入る幅)。
+LLAMA_LOG_TAIL_BYTES = 2 * 1024 * 1024
+# 行頭の時刻(起動からの 分.秒.ミリ秒.マイクロ秒)と、休止の出入りの行。
+LLAMA_LOG_TIME_RE = re.compile(r"^(\d+)\.(\d{2})\.(\d{3})\.(\d{3}) ")
+LLAMA_SLEEP_ENTER = "server is entering sleeping state"
+LLAMA_SLEEP_EXIT = "server is exiting sleeping state"

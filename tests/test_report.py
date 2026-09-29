@@ -40,6 +40,8 @@ def _mock_collect(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(collect, "process_cwds", lambda pids: "")
     monkeypatch.setattr(collect, "launchd_jobs", lambda: "")
     monkeypatch.setattr(collect, "process_elapsed", lambda pids: "")
+    # llama-server の休止状態の問い合わせ(中身は test_llama_sleep)。実際の口へ繋がせない。
+    monkeypatch.setattr(collect, "http_get", lambda url: "")
 
 
 class TestBuildProcesses:

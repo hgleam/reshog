@@ -14,6 +14,7 @@
 | `constants.py` | 定数の唯一の置き場（しきい値・コマンド名・`--help` の説明文）。実装のファイル・型の置き場には定数を置かない | なし |
 | `origin.py` | 作業ディレクトリ・launchd ジョブ名から由来（`Origin`）を決める（`repo_root` / `resolve`）と、止めるときに bootout へ渡すサービス名（`launchd_service`。`<ドメイン>/<ラベル>`。GUI アプリの自動ラベルと `com.apple.*` は除く。`Process.launchd_service` に入り、止め方の案内に使う）。worktree は `.git` ファイルの gitdir をたどって本体のリポへ寄せる | あり（ファイルシステムの読み取りのみ） |
 | `known.py` | 上位に出る macOS のプロセスの説明（`describe`）。対応表は `constants.KNOWN_PROCESSES`、実行ファイル名で完全一致させる（部分一致だと `python WindowServer.py` を OS のプロセスと取り違える） | なし |
+| `llama.py` | llama-server の休止状態（`endpoint` でコマンドから問い合わせ先、`last_transition` でログの最後の休止の出入り。ログは起動し直すと時刻が 0 に戻るので、戻った後の行だけを見る）。付与は `report._with_llm_states` | なし |
 | `group.py` | アプリ名の決め方（`app_label` / `group_label`）と、それをキーにしたアプリ別の集約（`group_processes`） | なし |
 | `aggregate.py` | プロセスを名前で束ねて合計し順位を付ける（`bucket_processes`）。アプリ別・PJ 別で共有 | なし |
 | `report.py` | `collect` × `parse` を組み合わせて一覧・システム状況を構築 | あり（collect 経由） |
