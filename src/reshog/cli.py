@@ -21,7 +21,7 @@ import typer
 from rich.console import Console
 from rich.markup import escape
 
-from . import __version__, control, render, report
+from . import __version__, control, known, render, report
 from .constants import COMMAND_BY_SORT, CPU_HELP, MEM_HELP
 from .models import Process, View
 
@@ -69,6 +69,11 @@ def _kill_process(
 
     sig = signal.SIGKILL if force else signal.SIGTERM
     console.print(f"[dim]{label}[/dim]")
+    about = known.describe(target.command) if target is not None else None
+    if about is not None and not about.stoppable:
+        console.print(
+            f"[yellow]{escape(about.purpose)}です。{escape(about.advice)}。[/yellow]"
+        )
     if target is not None and target.launchd_service:
         # 止める手段は奪わない(確認すれば送る)。ただし効かない可能性と、効く手段を先に見せる。
         console.print(

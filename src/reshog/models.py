@@ -24,6 +24,21 @@ class Origin:
 
 
 @dataclass(frozen=True)
+class KnownProcess:
+    """OS のプロセスの説明(何のためのものか・止めてよいか)。
+
+    Attributes:
+        purpose: 何のためのものか。
+        advice: どうするか(止めてよいか・止めるならどうするか)。
+        stoppable: 止めてよいか。False なら停止の案内を出さず、--kill で警告する。
+    """
+
+    purpose: str
+    advice: str
+    stoppable: bool
+
+
+@dataclass(frozen=True)
 class Process:
     """1 プロセスのメモリ実態。
 

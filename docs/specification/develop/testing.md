@@ -4,7 +4,7 @@
 
 `tests/` 配下、pytest。`collect`（外部コマンド I/O）をモックするため macOS 非依存で CI（Linux）でも動く。
 
-件数は pytest 収集数（parametrize 展開後）。合計 217。文書整合のスクリプト型テスト
+件数は pytest 収集数（parametrize 展開後）。合計 239。文書整合のスクリプト型テスト
 （`python3 tests/test_doc_*.py` でも走るもの）は pytest からは 1 件に見えるので 1 と数え、
 中の検査項目は「対象」に書く。この表と合計は `test_doc_test_counts.py` が実際の収集数と照合する。
 
@@ -22,6 +22,7 @@
 | `test_project_totals.py` | 15 | `--project`: PJ 別の合計と順位 / PJ 不明を順位に混ぜず別に合計 / 全プロセスを 1 回の lsof で引くこと / PJ 列と同じ表記（`origin.label`）/ `bucket_processes` を `--group` と共有 / 表・JSON |
 | `conftest.py` | — | `cell(rendered, pid, column)`: 描画した表から列名でセルを取る（行のどこかの `-` に当たって素通りするのを防ぐ） |
 | `test_launchd_stop.py` | 18 | launchd ジョブの止め方: `origin.launchd_service`（gui / system のドメイン・GUI アプリの自動ラベルと `com.apple.*` は除く）/ `collect.launchd_domain`（root なら system）/ `origin.service_domain`（ラベルに / があってもドメインを取り違えない）/ Apple のジョブも PJ 列はそのまま / PJ がリポ名でもサービス名を持つ / `stop_command`（bootout・shell quote）/ 表の下の案内と戻し方 / `--kill` の警告（確認すれば送る）/ JSON |
+| `test_known_processes.py` | 22 | OS のプロセスの説明: `known.describe`（実行ファイル名の完全一致・OS の置き場所の外の同名ファイルを拾わない）/ Spotlight は止めてよいがすぐ起動し直す/ 表の行に「ⓘ 用途・止めない」/ 止めてはいけないものは停止の案内を出さない / `--kill` の警告（確認すれば送る） |
 | `test_control.py` | 4 | `control.send_signal`（os.kill をモック・例外→結果コード翻訳）/ `current_pid` |
 | `test_cli_view.py` | 5 | `cli._render_view`: `--watch` はデータを集め終えてから画面を消す（4 種の表示すべて）/ 集約表示は停止の選択肢を返さない |
 | `test_structure.py` | 8 | 置き場所の約束: `report.build_*` を呼ぶのは `_render_view` だけ / render に `kind` 引数も表示の種類の文字列との比較も持ち込まない / 文書が名指しする定数が実在する / 実装のファイルに定数・型定義を置かない / 型の置き場に定数を置かない / 同じ値の定数を 2 つの名前で持たない |

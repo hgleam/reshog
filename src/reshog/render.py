@@ -9,7 +9,7 @@ from rich.markup import escape
 from rich.table import Table
 from rich.text import Text
 
-from . import origin
+from . import known, origin
 from .constants import ALERT_CPU, ALERT_MB, COMMAND_BY_SORT, MAX_CMD
 from .models import Origin, Process, ProcessGroup, SystemCpu, SystemMemory
 
@@ -160,6 +160,10 @@ def render_table(
         cmd = Text(_shorten(p.command), style=row_style)
         if p.hidden_gpu:
             cmd.append("  ⚠ GPU/Metal常駐(psに出ない)", style="yellow")
+        about = known.describe(p.command)
+        if about is not None:
+            note = about.purpose if about.stoppable else f"{about.purpose}・止めない"
+            cmd.append(f"  ⓘ {note}", style="cyan")
         table.add_row(
             str(rank),
             format_mb(p.mem_mb),
@@ -179,19 +183,25 @@ def render_table(
         amount = f"{top.cpu:g}%CPU" if by_cpu else format_mb(top.mem_mb)
         console.print(f"  [green]PID {top.pid} / {amount}[/green]")
         console.print(f"  [dim]{escape(_shorten(top.command))}[/dim]")
-        # 提案するのは「いま見ている並び順を再現するコマンド」。invoke されたコマンド名を
-        # そのまま使うと、memhog --sort cpu で見ているのに memhog --kill を勧めることになり、
-        # 開き直した画面の並びが変わる。
-        console.print(
-            f"  停止するなら:  [bold]{COMMAND_BY_SORT[order]} --kill[/bold]"
-            f"  または  [bold]{escape(stop_command(top))}[/bold]"
-        )
-        if top.launchd_service:
-            domain = origin.service_domain(top.launchd_service)
+        about = known.describe(top.command)
+        if about is not None:
+            console.print(f"  [cyan]これは: {escape(about.purpose)}[/cyan]")
+            console.print(f"  [cyan]{escape(about.advice)}[/cyan]")
+        # 止めてはいけないもの(WindowServer 等)には停止の案内を出さない。
+        if about is None or about.stoppable:
+            # 提案するのは「いま見ている並び順を再現するコマンド」。invoke されたコマンド名を
+            # そのまま使うと、memhog --sort cpu で見ているのに memhog --kill を勧めることになり、
+            # 開き直した画面の並びが変わる。
             console.print(
-                "  [dim]launchd の常駐ジョブなので、kill しても起動し直されることがある"
-                f"(戻すときは launchctl bootstrap {escape(domain)} <plist のパス>)[/dim]"
+                f"  停止するなら:  [bold]{COMMAND_BY_SORT[order]} --kill[/bold]"
+                f"  または  [bold]{escape(stop_command(top))}[/bold]"
             )
+            if top.launchd_service:
+                domain = origin.service_domain(top.launchd_service)
+                console.print(
+                    "  [dim]launchd の常駐ジョブなので、kill しても起動し直されることがある"
+                    f"(戻すときは launchctl bootstrap {escape(domain)} <plist のパス>)[/dim]"
+                )
     console.print()
 
 
