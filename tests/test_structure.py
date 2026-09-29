@@ -146,3 +146,51 @@ def test_no_constant_is_written_twice() -> None:
     assert len(values) >= 10, values
     duplicated = {v: names for v, names in values.items() if len(names) > 1}
     assert not duplicated, duplicated
+
+
+# 文書に出てくる大文字の名前のうち、reshog の定数ではないもの(理由つき)。
+_DOC_NAMES_NOT_CONSTANTS = {
+    "GITHUB_TOKEN": "CI の環境変数",
+    "PID": "列名・用語",
+    "WATCH_PATTERNS": "scripts/check-spec-freshness.sh の変数",
+}
+_DOC_CONSTANT = re.compile(r"`(_?[A-Z][A-Z0-9_]{2,})(?: = [^`]*)?`")
+
+
+def test_constants_named_in_docs_exist() -> None:
+    """文書が名指しする定数が constants.py に実在する(改名しても文書は誰も落とさない)。
+
+    実例: 定数を constants.py へ移して _MAX_CMD → MAX_CMD に改名したとき、testing.md の
+    説明だけ古い名前のまま残った(レビューで見つかった)。
+    """
+    from reshog import constants
+
+    root = SRC.parent.parent
+    docs = [root / "README.md", *sorted((root / "docs").rglob("*.md"))]
+    named = {
+        (m.group(1), doc.relative_to(root).as_posix())
+        for doc in docs
+        for m in _DOC_CONSTANT.finditer(doc.read_text(encoding="utf-8"))
+    }
+    assert len(named) >= 5, named
+    missing = sorted(
+        f"{path}: {name}"
+        for name, path in named
+        if name not in _DOC_NAMES_NOT_CONSTANTS and not hasattr(constants, name)
+    )
+    assert not missing, missing
+
+
+def test_render_has_no_view_kind_comparisons() -> None:
+    """render.py で表示の種類の文字列と比べる分岐を置かない(引数名を変えた再導入も拾う)。"""
+    kinds = {"app", "group", "project", "processes"}
+    found = [
+        node.lineno
+        for node in ast.walk(_tree("render.py"))
+        if isinstance(node, ast.Compare)
+        and any(
+            isinstance(c, ast.Constant) and c.value in kinds
+            for c in [node.left, *node.comparators]
+        )
+    ]
+    assert not found, found

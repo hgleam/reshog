@@ -59,6 +59,19 @@ class TestBuildProcesses:
         procs, _ = report.build_processes(count=10, pattern="python")
         assert [p.pid for p in procs] == [28632]
 
+    def test_rss_is_read_only_for_shown_processes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """RSS(ps を 1 回叩く)は、絞り込みと件数に通ったものだけに取る。
+
+        上位 N 件の表示は候補を多めに取るので、全候補に ps を叩くと呼び出しが膨らむ。
+        """
+        asked: list[int] = []
+        monkeypatch.setattr(collect, "ps_rss_mb", lambda pid: asked.append(pid) or 0)
+        report.build_processes(count=1)
+        assert asked == [28632]
+        asked.clear()
+        report.build_processes(count=10, pattern="llama")
+        assert asked == [29473]
+
     def test_pattern_is_case_insensitive(self) -> None:
         procs, _ = report.build_processes(count=10, pattern="LLAMA")
         assert [p.pid for p in procs] == [29473]
