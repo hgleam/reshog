@@ -4,7 +4,7 @@
 
 `tests/` 配下、pytest。`collect`（外部コマンド I/O）をモックするため macOS 非依存で CI（Linux）でも動く。
 
-件数は pytest 収集数（parametrize 展開後）。合計 185。文書整合のスクリプト型テスト
+件数は pytest 収集数（parametrize 展開後）。合計 196。文書整合のスクリプト型テスト
 （`python3 tests/test_doc_*.py` でも走るもの）は pytest からは 1 件に見えるので 1 と数え、
 中の検査項目は「対象」に書く。この表と合計は `test_doc_test_counts.py` が実際の収集数と照合する。
 
@@ -21,7 +21,9 @@
 | `test_started.py` | 18 | 起動列: `parse_etime_seconds`（`[[dd-]hh:]mm:ss`）/ `parse_ps_etime` / 「いま − 経過」/ 表・JSON |
 | `test_project_totals.py` | 15 | `--project`: PJ 別の合計と順位 / PJ 不明を順位に混ぜず別に合計 / 全プロセスを 1 回の lsof で引くこと / PJ 列と同じ表記（`origin.label`）/ `bucket_processes` を `--group` と共有 / 表・JSON |
 | `conftest.py` | — | `cell(rendered, pid, column)`: 描画した表から列名でセルを取る（行のどこかの `-` に当たって素通りするのを防ぐ） |
-| `test_collect.py` | 4 | `send_signal`（os.kill をモック・例外→結果コード翻訳）/ `current_pid` |
+| `test_control.py` | 4 | `control.send_signal`（os.kill をモック・例外→結果コード翻訳）/ `current_pid` |
+| `test_cli_view.py` | 5 | `cli._render_view`: `--watch` はデータを集め終えてから画面を消す（4 種の表示すべて）/ 集約表示は停止の選択肢を返さない |
+| `test_structure.py` | 6 | 置き場所の約束: `report.build_*` を呼ぶのは `_render_view` だけ / render に `kind` 引数を持ち込まない / 実装のファイルに定数・型定義を置かない / 型の置き場に定数を置かない / 同じ値の定数を 2 つの名前で持たない |
 | `test_spec_freshness.py` | 7 | 仕様書鮮度チェックの仕組みが揃っていることの構造テスト |
 | `test_doc_tree.py` | 1 | 構成ツリー ↔ 実ファイルの双方向照合（漏れ／幽霊）＋2箇所以外への複製検出 |
 | `test_doc_facts.py` | 1 | 文書の数値 ↔ コード実値（`--count` 既定・`HIDDEN_GPU_MIN_MB` ・`HIDDEN_GPU_RSS_RATIO` ・`GROUP_SAMPLE_MIN` ・`_MAX_CMD`） |

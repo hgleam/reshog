@@ -5,50 +5,9 @@ Chromium 系ブラウザや MCP サーバはヘルパープロセスへ分散す
 親子関係をたどってアプリ単位へ畳み、その分散を可視化する。
 """
 
-from collections.abc import Callable
-
+from . import aggregate
+from .constants import INTERPRETERS, TRANSPARENT
 from .models import Process, ProcessGroup, PsEntry
-
-# argv[0] がこれらのときは「何を動かしているか」(スクリプト名)を表示名に採る。
-_INTERPRETERS = frozenset(
-    {
-        "node",
-        "python",
-        "python3",
-        "Python",
-        "ruby",
-        "perl",
-        "php",
-        "deno",
-        "bun",
-        "java",
-        "Rscript",
-    }
-)
-
-# 親としてたどっても意味を持たない「器」。ここで止めるとシェルや端末に全部吸われる。
-_TRANSPARENT = frozenset(
-    {
-        "tmux",
-        "tmux-server",
-        "screen",
-        "login",
-        "sh",
-        "bash",
-        "zsh",
-        "fish",
-        "env",
-        "xargs",
-        "sshd",
-        "launchd",
-        "Terminal",
-        "iTerm2",
-        "Alacritty",
-        "WezTerm",
-        "kitty",
-        "Ghostty",
-    }
-)
 
 
 def _bundle_name(command: str) -> str | None:
@@ -82,7 +41,7 @@ def app_label(command: str) -> str:
         アプリ名。導出できなければ "?"。
     """
     bundle = _bundle_name(command)
-    if bundle is not None and bundle not in _INTERPRETERS:
+    if bundle is not None and bundle not in INTERPRETERS:
         return bundle
 
     argv = command.split()
@@ -92,7 +51,7 @@ def app_label(command: str) -> str:
     base = argv[0].rsplit("/", 1)[-1].lstrip("-")
     if not base:
         return "?"
-    if base in _INTERPRETERS or bundle in _INTERPRETERS:
+    if base in INTERPRETERS or bundle in INTERPRETERS:
         for arg in argv[1:]:
             if arg.startswith("-"):
                 continue
@@ -103,7 +62,7 @@ def app_label(command: str) -> str:
 def group_label(pid: int, snapshot: dict[int, PsEntry]) -> str:
     """PID が属するアプリ名を、親をたどって決める。
 
-    最上位の祖先まで遡り、シェル・端末・多重化ツール(_TRANSPARENT)でない最初のものを
+    最上位の祖先まで遡り、シェル・端末・多重化ツール(TRANSPARENT)でない最初のものを
     そのプロセスの所属アプリとみなす。tmux 配下の CLI が全部 tmux に吸われるのを防ぐ。
 
     Args:
@@ -129,7 +88,7 @@ def group_label(pid: int, snapshot: dict[int, PsEntry]) -> str:
 
     for ancestor in reversed(chain):
         label = app_label(ancestor.command)
-        if label not in _TRANSPARENT:
+        if label not in TRANSPARENT:
             return label
     return app_label(entry.command)
 
@@ -147,46 +106,4 @@ def group_processes(
     Returns:
         ProcessGroup のリスト(並びは bucket_processes と同じ)。
     """
-    return bucket_processes(processes, lambda p: group_label(p.pid, snapshot), order)
-
-
-def bucket_processes(
-    processes: list[Process], key: Callable[[Process], str], order: str = "mem"
-) -> list[ProcessGroup]:
-    """プロセスを key が返す名前で束ね、指定した資源の合計降順で返す。
-
-    アプリ別(--group)と PJ 別(--project)は束ねるキーだけが違う。並べ方を 2 か所に
-    書くと、片方だけ直って順位の付け方がずれるため、ここに 1 つだけ置く。
-
-    Args:
-        processes: 集約対象のプロセス(降順である必要はない)。
-        key: プロセスから束ねる名前を返す関数。
-        order: 並べる基準。"mem"(合計メモリ)または "cpu"(合計 CPU)。
-
-    Returns:
-        ProcessGroup のリスト(指定資源の合計降順。同値なら件数の多い順)。
-        グループ内の members も同じ基準の降順に並ぶ(最大単体の表示に使うため)。
-    """
-    by_cpu = order == "cpu"
-    buckets: dict[str, list[Process]] = {}
-    for process in processes:
-        buckets.setdefault(key(process), []).append(process)
-
-    groups = [
-        ProcessGroup(
-            label=label,
-            members=tuple(
-                sorted(
-                    members,
-                    key=(lambda p: p.cpu) if by_cpu else (lambda p: p.mem_mb),
-                    reverse=True,
-                )
-            ),
-        )
-        for label, members in buckets.items()
-    ]
-    groups.sort(
-        key=(lambda g: (g.total_cpu, g.count)) if by_cpu else (lambda g: (g.total_mb, g.count)),
-        reverse=True,
-    )
-    return groups
+    return aggregate.bucket_processes(processes, lambda p: group_label(p.pid, snapshot), order)

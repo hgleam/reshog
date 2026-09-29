@@ -3,7 +3,6 @@
 import json
 import shlex
 from datetime import datetime
-from typing import Literal
 
 from rich.console import Console
 from rich.markup import escape
@@ -11,17 +10,8 @@ from rich.table import Table
 from rich.text import Text
 
 from . import origin
-from .models import COMMAND_BY_SORT, Origin, Process, ProcessGroup, SystemCpu, SystemMemory
-
-_MAX_CMD = 96
-
-# 集約の種類。"app" = --group(親子関係でアプリ別)、"project" = --project(PJ 別)。
-GroupKind = Literal["app", "project"]
-
-# この値以上を食っているものは赤で強調する(プロセス単位・アプリ単位で共通)。
-_ALERT_MB = 8000
-# CPU も同様。100% = 1 コアを丸ごと占有している状態。
-_ALERT_CPU = 100.0
+from .constants import ALERT_CPU, ALERT_MB, COMMAND_BY_SORT, MAX_CMD
+from .models import Origin, Process, ProcessGroup, SystemCpu, SystemMemory
 
 
 def _shorten(command: str) -> str:
@@ -31,7 +21,7 @@ def _shorten(command: str) -> str:
         省略しても中身は他プロセス由来の文字列のままなので、rich の console.print へ
         渡す際は必ず `escape()` を通すこと(マークアップとして解釈させない)。
     """
-    return command if len(command) <= _MAX_CMD else command[: _MAX_CMD - 3] + "..."
+    return command if len(command) <= MAX_CMD else command[: MAX_CMD - 3] + "..."
 
 
 def _origin_text(found: Origin | None) -> Text:
@@ -148,7 +138,7 @@ def render_table(
     table.add_column("COMMAND")
 
     for rank, p in enumerate(processes, start=1):
-        alert = p.cpu >= _ALERT_CPU if by_cpu else p.mem_mb >= _ALERT_MB
+        alert = p.cpu >= ALERT_CPU if by_cpu else p.mem_mb >= ALERT_MB
         row_style = "red" if alert else ""
         cmd = Text(_shorten(p.command), style=row_style)
         if p.hidden_gpu:
@@ -224,10 +214,8 @@ def render_group_table(
     cpu: SystemCpu,
     grep: str | None = None,
     order: str = "mem",
-    kind: GroupKind = "app",
-    unknown: ProcessGroup | None = None,
 ) -> None:
-    """アプリ別 / PJ 別に集約した結果を表形式で出力する。
+    """アプリ別(--group)に集約した結果を表形式で出力する。
 
     Args:
         console: 出力先の rich Console。
@@ -236,18 +224,87 @@ def render_group_table(
         cpu: システム全体の CPU 状況。
         grep: 適用中の -g パターン。指定時は「部分合計」であることを見出しに明示する。
         order: 並べた基準。"mem" または "cpu"。
-        kind: "app"(--group)または "project"(--project)。見出し・列名・提案文が変わる。
-        unknown: PJ 別のとき、PJ が分からなかったプロセスの合計(順位には入れない)。
+    """
+    _render_totals(
+        console, groups, system, cpu, grep, order,
+        title="アプリ別 {resource} (ヘルパープロセスを親子関係で合算)",
+        label_header="APP",
+    )
+    if groups:
+        console.print(
+            "  内訳を見るなら:  "
+            f"[bold]{COMMAND_BY_SORT[order]} --app "
+            f"{escape(shlex.quote(groups[0].label))}[/bold]"
+        )
+    console.print()
+
+
+def render_project_table(
+    console: Console,
+    projects: list[ProcessGroup],
+    unknown: ProcessGroup | None,
+    system: SystemMemory,
+    cpu: SystemCpu,
+    grep: str | None = None,
+    order: str = "mem",
+) -> None:
+    """PJ 別(--project)に集約した結果を表形式で出力する。
+
+    `--app` は APP 名しか受け取らないので、内訳の提案は出さない。
+
+    Args:
+        console: 出力先の rich Console。
+        projects: 表示する PJ(order で指定した資源の合計降順)。
+        unknown: PJ が分からなかったプロセスの合計(順位には入れない)。無ければ None。
+        system: システム全体のメモリ状況。
+        cpu: システム全体の CPU 状況。
+        grep: 適用中の -g パターン。
+        order: 並べた基準。"mem" または "cpu"。
+    """
+    _render_totals(
+        console, projects, system, cpu, grep, order,
+        title="PJ 別 {resource} (作業ディレクトリの git リポ / launchd ジョブで合算)",
+        label_header="PJ",
+    )
+    if unknown is not None:
+        console.print(
+            f"  [dim]PJ 不明(GUI アプリ・root のプロセス等): {_amount(unknown, order)}"
+            f" / {unknown.count}プロセス  ※順位には入れていない[/dim]"
+        )
+    console.print()
+
+
+def _amount(group: ProcessGroup, order: str) -> str:
+    """並べた基準での合計(CPU なら %、メモリなら G/M)。"""
+    return f"{group.total_cpu:g}%CPU" if order == "cpu" else format_mb(group.total_mb)
+
+
+def _render_totals(
+    console: Console,
+    groups: list[ProcessGroup],
+    system: SystemMemory,
+    cpu: SystemCpu,
+    grep: str | None,
+    order: str,
+    title: str,
+    label_header: str,
+) -> None:
+    """集約の表と「最大の消費元」を出す(アプリ別 / PJ 別で共通の部分)。
+
+    Args:
+        console: 出力先の rich Console。
+        groups: 表示するグループ。
+        system: システム全体のメモリ状況。
+        cpu: システム全体の CPU 状況。
+        grep: 適用中の -g パターン。指定時は「部分合計」であることを見出しに明示する。
+        order: 並べた基準。"mem" または "cpu"。
+        title: 見出し。`{resource}` が「実メモリ合計」/「CPU合計」に置き換わる。
+        label_header: 名前の列の見出し。
     """
     _render_system(console, system, cpu)
 
     by_cpu = order == "cpu"
-    resource = "CPU合計" if by_cpu else "実メモリ合計"
-    title = (
-        f"PJ 別 {resource} (作業ディレクトリの git リポ / launchd ジョブで合算)"
-        if kind == "project"
-        else f"アプリ別 {resource} (ヘルパープロセスを親子関係で合算)"
-    )
+    title = title.format(resource="CPU合計" if by_cpu else "実メモリ合計")
     if grep:
         title += f" ※ -g {escape(shlex.quote(grep))} 一致プロセスのみの部分合計"
     table = Table(
@@ -265,10 +322,10 @@ def render_group_table(
     table.add_column("件数", justify="right")
     table.add_column("最大単体", justify="right")
     table.add_column("最大PID", justify="right")
-    table.add_column("PJ" if kind == "project" else "APP")
+    table.add_column(label_header)
 
     for rank, g in enumerate(groups, start=1):
-        alert = g.total_cpu >= _ALERT_CPU if by_cpu else g.total_mb >= _ALERT_MB
+        alert = g.total_cpu >= ALERT_CPU if by_cpu else g.total_mb >= ALERT_MB
         row_style = "red" if alert else ""
         label = Text(g.label, style=row_style)
         if g.hidden_gpu:
@@ -288,74 +345,78 @@ def render_group_table(
     if groups:
         top = groups[0]
         console.print("[bold]== 最大の消費元 ==[/bold]")
-        amount = f"{top.total_cpu:g}%CPU" if by_cpu else format_mb(top.total_mb)
         console.print(
-            f"  [green]{escape(top.label)} / {amount}"
+            f"  [green]{escape(top.label)} / {_amount(top, order)}"
             f" / {top.count}プロセス[/green]"
         )
         console.print(
             f"  [dim]最大単体: PID {top.largest.pid} "
             f"{escape(_shorten(top.largest.command))}[/dim]"
         )
-        # --app が受け取るのは APP 名だけ。PJ 名を渡す提案は打っても何も出ない。
-        if kind == "app":
-            console.print(
-                "  内訳を見るなら:  "
-                f"[bold]{COMMAND_BY_SORT[order]} --app "
-                f"{escape(shlex.quote(top.label))}[/bold]"
-            )
-    if unknown is not None:
-        amount = f"{unknown.total_cpu:g}%CPU" if by_cpu else format_mb(unknown.total_mb)
-        console.print(
-            f"  [dim]PJ 不明(GUI アプリ・root のプロセス等): {amount}"
-            f" / {unknown.count}プロセス  ※順位には入れていない[/dim]"
-        )
-    console.print()
+
+
+def _group_items(groups: list[ProcessGroup]) -> list[dict[str, object]]:
+    """集約結果の JSON 要素(アプリ別 / PJ 別で同じ形)。"""
+    return [
+        {
+            "rank": rank,
+            "label": g.label,
+            "total_mb": g.total_mb,
+            "total_cpu": g.total_cpu,
+            "count": g.count,
+            "hidden_gpu": g.hidden_gpu,
+            "largest": {
+                "pid": g.largest.pid,
+                "mem_mb": g.largest.mem_mb,
+                "cpu": g.largest.cpu,
+                "command": g.largest.command,
+            },
+        }
+        for rank, g in enumerate(groups, start=1)
+    ]
 
 
 def build_group_json(
-    groups: list[ProcessGroup],
-    system: SystemMemory,
-    cpu: SystemCpu,
-    kind: GroupKind = "app",
-    unknown: ProcessGroup | None = None,
+    groups: list[ProcessGroup], system: SystemMemory, cpu: SystemCpu
 ) -> str:
-    """アプリ別 / PJ 別の集約結果を機械可読な JSON 文字列にする。
+    """アプリ別の集約結果を機械可読な JSON 文字列にする。
 
     Args:
         groups: グループ一覧。
         system: システムのメモリ状況。
         cpu: システムの CPU 状況。
-        kind: "app" なら `groups`、"project" なら `projects` と `unknown` を出す。
-        unknown: PJ が分からなかったプロセスの合計(kind="project" のときだけ使う)。
 
     Returns:
-        整形済み JSON 文字列。
+        整形済み JSON 文字列(`system` と `groups[]`)。
     """
-    payload: dict[str, object] = {
+    payload = {"system": _system_payload(system, cpu), "groups": _group_items(groups)}
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def build_project_json(
+    projects: list[ProcessGroup],
+    unknown: ProcessGroup | None,
+    system: SystemMemory,
+    cpu: SystemCpu,
+) -> str:
+    """PJ 別の集約結果を機械可読な JSON 文字列にする。
+
+    Args:
+        projects: PJ 別のグループ一覧。
+        unknown: PJ が分からなかったプロセスの合計。無ければ None。
+        system: システムのメモリ状況。
+        cpu: システムの CPU 状況。
+
+    Returns:
+        整形済み JSON 文字列(`system` と `projects[]` と `unknown`)。
+    """
+    payload = {
         "system": _system_payload(system, cpu),
-        "projects" if kind == "project" else "groups": [
-            {
-                "rank": rank,
-                "label": g.label,
-                "total_mb": g.total_mb,
-                "total_cpu": g.total_cpu,
-                "count": g.count,
-                "hidden_gpu": g.hidden_gpu,
-                "largest": {
-                    "pid": g.largest.pid,
-                    "mem_mb": g.largest.mem_mb,
-                    "cpu": g.largest.cpu,
-                    "command": g.largest.command,
-                },
-            }
-            for rank, g in enumerate(groups, start=1)
-        ],
-    }
-    if kind == "project":
-        payload["unknown"] = (
+        "projects": _group_items(projects),
+        "unknown": (
             {"total_mb": unknown.total_mb, "total_cpu": unknown.total_cpu, "count": unknown.count}
             if unknown
             else None
-        )
+        ),
+    }
     return json.dumps(payload, ensure_ascii=False, indent=2)

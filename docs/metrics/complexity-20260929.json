@@ -1,0 +1,738 @@
+{
+  "files": [
+    {
+      "path": "reshog/__init__.py",
+      "lines": 7,
+      "top_level_functions": 0,
+      "type_defs": 0,
+      "constants": 0,
+      "behaviour_classes": 0
+    },
+    {
+      "path": "reshog/aggregate.py",
+      "lines": 52,
+      "top_level_functions": 1,
+      "type_defs": 0,
+      "constants": 0,
+      "behaviour_classes": 0
+    },
+    {
+      "path": "reshog/cli.py",
+      "lines": 304,
+      "top_level_functions": 7,
+      "type_defs": 0,
+      "constants": 0,
+      "behaviour_classes": 0
+    },
+    {
+      "path": "reshog/collect.py",
+      "lines": 150,
+      "top_level_functions": 10,
+      "type_defs": 0,
+      "constants": 0,
+      "behaviour_classes": 0
+    },
+    {
+      "path": "reshog/constants.py",
+      "lines": 136,
+      "top_level_functions": 0,
+      "type_defs": 0,
+      "constants": 16,
+      "behaviour_classes": 0
+    },
+    {
+      "path": "reshog/control.py",
+      "lines": 40,
+      "top_level_functions": 2,
+      "type_defs": 0,
+      "constants": 0,
+      "behaviour_classes": 0
+    },
+    {
+      "path": "reshog/group.py",
+      "lines": 110,
+      "top_level_functions": 4,
+      "type_defs": 0,
+      "constants": 0,
+      "behaviour_classes": 0
+    },
+    {
+      "path": "reshog/models.py",
+      "lines": 155,
+      "top_level_functions": 0,
+      "type_defs": 6,
+      "constants": 0,
+      "behaviour_classes": 0
+    },
+    {
+      "path": "reshog/origin.py",
+      "lines": 91,
+      "top_level_functions": 4,
+      "type_defs": 0,
+      "constants": 0,
+      "behaviour_classes": 0
+    },
+    {
+      "path": "reshog/parse.py",
+      "lines": 261,
+      "top_level_functions": 12,
+      "type_defs": 0,
+      "constants": 0,
+      "behaviour_classes": 0
+    },
+    {
+      "path": "reshog/render.py",
+      "lines": 423,
+      "top_level_functions": 15,
+      "type_defs": 0,
+      "constants": 0,
+      "behaviour_classes": 0
+    },
+    {
+      "path": "reshog/report.py",
+      "lines": 252,
+      "top_level_functions": 11,
+      "type_defs": 0,
+      "constants": 0,
+      "behaviour_classes": 0
+    }
+  ],
+  "functions": [
+    {
+      "path": "reshog/aggregate.py",
+      "line": 12,
+      "name": "bucket_processes",
+      "lines": 40,
+      "complexity": 5,
+      "depth": 1
+    },
+    {
+      "path": "reshog/cli.py",
+      "line": 28,
+      "name": "_make_version_callback",
+      "lines": 16,
+      "complexity": 1,
+      "depth": 1
+    },
+    {
+      "path": "reshog/cli.py",
+      "line": 46,
+      "name": "_kill_process",
+      "lines": 38,
+      "complexity": 11,
+      "depth": 1
+    },
+    {
+      "path": "reshog/cli.py",
+      "line": 86,
+      "name": "_build_app",
+      "lines": 78,
+      "complexity": 1,
+      "depth": 1
+    },
+    {
+      "path": "reshog/cli.py",
+      "line": 166,
+      "name": "_option_error",
+      "lines": 30,
+      "complexity": 13,
+      "depth": 1
+    },
+    {
+      "path": "reshog/cli.py",
+      "line": 198,
+      "name": "_view_of",
+      "lines": 9,
+      "complexity": 4,
+      "depth": 1
+    },
+    {
+      "path": "reshog/cli.py",
+      "line": 209,
+      "name": "_render_view",
+      "lines": 58,
+      "complexity": 11,
+      "depth": 3
+    },
+    {
+      "path": "reshog/cli.py",
+      "line": 269,
+      "name": "_run_watch",
+      "lines": 27,
+      "complexity": 3,
+      "depth": 2
+    },
+    {
+      "path": "reshog/cli.py",
+      "line": 38,
+      "name": "_callback",
+      "lines": 4,
+      "complexity": 2,
+      "depth": 1
+    },
+    {
+      "path": "reshog/cli.py",
+      "line": 100,
+      "name": "main",
+      "lines": 62,
+      "complexity": 4,
+      "depth": 1
+    },
+    {
+      "path": "reshog/collect.py",
+      "line": 12,
+      "name": "_run",
+      "lines": 14,
+      "complexity": 2,
+      "depth": 1
+    },
+    {
+      "path": "reshog/collect.py",
+      "line": 28,
+      "name": "top_sample",
+      "lines": 25,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/collect.py",
+      "line": 55,
+      "name": "ps_command",
+      "lines": 10,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/collect.py",
+      "line": 67,
+      "name": "ps_rss_mb",
+      "lines": 11,
+      "complexity": 2,
+      "depth": 0
+    },
+    {
+      "path": "reshog/collect.py",
+      "line": 80,
+      "name": "ps_snapshot",
+      "lines": 10,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/collect.py",
+      "line": 92,
+      "name": "process_cwds",
+      "lines": 15,
+      "complexity": 2,
+      "depth": 1
+    },
+    {
+      "path": "reshog/collect.py",
+      "line": 109,
+      "name": "process_elapsed",
+      "lines": 14,
+      "complexity": 2,
+      "depth": 1
+    },
+    {
+      "path": "reshog/collect.py",
+      "line": 125,
+      "name": "launchd_jobs",
+      "lines": 7,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/collect.py",
+      "line": 134,
+      "name": "swap_usage",
+      "lines": 7,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/collect.py",
+      "line": 143,
+      "name": "memory_pressure",
+      "lines": 7,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/control.py",
+      "line": 12,
+      "name": "current_pid",
+      "lines": 7,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/control.py",
+      "line": 21,
+      "name": "send_signal",
+      "lines": 19,
+      "complexity": 3,
+      "depth": 1
+    },
+    {
+      "path": "reshog/group.py",
+      "line": 13,
+      "name": "_bundle_name",
+      "lines": 16,
+      "complexity": 3,
+      "depth": 1
+    },
+    {
+      "path": "reshog/group.py",
+      "line": 31,
+      "name": "app_label",
+      "lines": 29,
+      "complexity": 9,
+      "depth": 3
+    },
+    {
+      "path": "reshog/group.py",
+      "line": 62,
+      "name": "group_label",
+      "lines": 32,
+      "complexity": 7,
+      "depth": 2
+    },
+    {
+      "path": "reshog/group.py",
+      "line": 96,
+      "name": "group_processes",
+      "lines": 14,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/models.py",
+      "line": 49,
+      "name": "hidden_gpu",
+      "lines": 14,
+      "complexity": 2,
+      "depth": 0
+    },
+    {
+      "path": "reshog/models.py",
+      "line": 128,
+      "name": "total_mb",
+      "lines": 3,
+      "complexity": 2,
+      "depth": 0
+    },
+    {
+      "path": "reshog/models.py",
+      "line": 133,
+      "name": "count",
+      "lines": 3,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/models.py",
+      "line": 138,
+      "name": "total_cpu",
+      "lines": 7,
+      "complexity": 2,
+      "depth": 0
+    },
+    {
+      "path": "reshog/models.py",
+      "line": 147,
+      "name": "largest",
+      "lines": 3,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/models.py",
+      "line": 152,
+      "name": "hidden_gpu",
+      "lines": 3,
+      "complexity": 2,
+      "depth": 0
+    },
+    {
+      "path": "reshog/origin.py",
+      "line": 13,
+      "name": "repo_root",
+      "lines": 22,
+      "complexity": 5,
+      "depth": 2
+    },
+    {
+      "path": "reshog/origin.py",
+      "line": 37,
+      "name": "_main_repo_of",
+      "lines": 19,
+      "complexity": 3,
+      "depth": 1
+    },
+    {
+      "path": "reshog/origin.py",
+      "line": 58,
+      "name": "label",
+      "lines": 12,
+      "complexity": 2,
+      "depth": 0
+    },
+    {
+      "path": "reshog/origin.py",
+      "line": 72,
+      "name": "resolve",
+      "lines": 19,
+      "complexity": 5,
+      "depth": 1
+    },
+    {
+      "path": "reshog/parse.py",
+      "line": 11,
+      "name": "parse_mem_to_mb",
+      "lines": 19,
+      "complexity": 2,
+      "depth": 1
+    },
+    {
+      "path": "reshog/parse.py",
+      "line": 32,
+      "name": "parse_top_processes",
+      "lines": 37,
+      "complexity": 8,
+      "depth": 2
+    },
+    {
+      "path": "reshog/parse.py",
+      "line": 71,
+      "name": "_last_header_value",
+      "lines": 15,
+      "complexity": 3,
+      "depth": 2
+    },
+    {
+      "path": "reshog/parse.py",
+      "line": 88,
+      "name": "parse_load_average",
+      "lines": 14,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/parse.py",
+      "line": 104,
+      "name": "parse_cpu_usage",
+      "lines": 14,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/parse.py",
+      "line": 120,
+      "name": "parse_phys_mem",
+      "lines": 13,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/parse.py",
+      "line": 135,
+      "name": "parse_free_percentage",
+      "lines": 13,
+      "complexity": 3,
+      "depth": 2
+    },
+    {
+      "path": "reshog/parse.py",
+      "line": 150,
+      "name": "parse_ps_snapshot",
+      "lines": 31,
+      "complexity": 7,
+      "depth": 2
+    },
+    {
+      "path": "reshog/parse.py",
+      "line": 183,
+      "name": "parse_lsof_cwd",
+      "lines": 20,
+      "complexity": 6,
+      "depth": 3
+    },
+    {
+      "path": "reshog/parse.py",
+      "line": 205,
+      "name": "parse_launchctl_list",
+      "lines": 15,
+      "complexity": 4,
+      "depth": 2
+    },
+    {
+      "path": "reshog/parse.py",
+      "line": 222,
+      "name": "parse_etime_seconds",
+      "lines": 19,
+      "complexity": 8,
+      "depth": 1
+    },
+    {
+      "path": "reshog/parse.py",
+      "line": 243,
+      "name": "parse_ps_etime",
+      "lines": 18,
+      "complexity": 5,
+      "depth": 2
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 17,
+      "name": "_shorten",
+      "lines": 8,
+      "complexity": 2,
+      "depth": 0
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 27,
+      "name": "_origin_text",
+      "lines": 8,
+      "complexity": 3,
+      "depth": 1
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 37,
+      "name": "_started_text",
+      "lines": 5,
+      "complexity": 2,
+      "depth": 1
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 44,
+      "name": "format_mb",
+      "lines": 12,
+      "complexity": 2,
+      "depth": 1
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 58,
+      "name": "_render_system",
+      "lines": 22,
+      "complexity": 6,
+      "depth": 1
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 82,
+      "name": "_system_payload",
+      "lines": 17,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 101,
+      "name": "render_table",
+      "lines": 72,
+      "complexity": 8,
+      "depth": 2
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 175,
+      "name": "build_json",
+      "lines": 33,
+      "complexity": 4,
+      "depth": 0
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 210,
+      "name": "render_group_table",
+      "lines": 30,
+      "complexity": 2,
+      "depth": 1
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 242,
+      "name": "render_project_table",
+      "lines": 33,
+      "complexity": 2,
+      "depth": 1
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 277,
+      "name": "_amount",
+      "lines": 3,
+      "complexity": 2,
+      "depth": 0
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 282,
+      "name": "_render_totals",
+      "lines": 74,
+      "complexity": 9,
+      "depth": 2
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 358,
+      "name": "_group_items",
+      "lines": 19,
+      "complexity": 2,
+      "depth": 0
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 379,
+      "name": "build_group_json",
+      "lines": 15,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/render.py",
+      "line": 396,
+      "name": "build_project_json",
+      "lines": 27,
+      "complexity": 2,
+      "depth": 0
+    },
+    {
+      "path": "reshog/report.py",
+      "line": 13,
+      "name": "build_processes",
+      "lines": 25,
+      "complexity": 4,
+      "depth": 1
+    },
+    {
+      "path": "reshog/report.py",
+      "line": 40,
+      "name": "build_system_memory",
+      "lines": 14,
+      "complexity": 2,
+      "depth": 0
+    },
+    {
+      "path": "reshog/report.py",
+      "line": 56,
+      "name": "build_system_cpu",
+      "lines": 13,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/report.py",
+      "line": 71,
+      "name": "build_groups",
+      "lines": 22,
+      "complexity": 1,
+      "depth": 0
+    },
+    {
+      "path": "reshog/report.py",
+      "line": 95,
+      "name": "build_projects",
+      "lines": 25,
+      "complexity": 5,
+      "depth": 0
+    },
+    {
+      "path": "reshog/report.py",
+      "line": 122,
+      "name": "_scan_all",
+      "lines": 27,
+      "complexity": 3,
+      "depth": 0
+    },
+    {
+      "path": "reshog/report.py",
+      "line": 151,
+      "name": "_processes_from_top",
+      "lines": 28,
+      "complexity": 6,
+      "depth": 2
+    },
+    {
+      "path": "reshog/report.py",
+      "line": 181,
+      "name": "build_app_processes",
+      "lines": 20,
+      "complexity": 2,
+      "depth": 0
+    },
+    {
+      "path": "reshog/report.py",
+      "line": 203,
+      "name": "_annotate",
+      "lines": 25,
+      "complexity": 5,
+      "depth": 1
+    },
+    {
+      "path": "reshog/report.py",
+      "line": 230,
+      "name": "_with_origins",
+      "lines": 17,
+      "complexity": 4,
+      "depth": 1
+    },
+    {
+      "path": "reshog/report.py",
+      "line": 249,
+      "name": "_now",
+      "lines": 3,
+      "complexity": 1,
+      "depth": 0
+    }
+  ],
+  "classes": [
+    {
+      "path": "reshog/models.py",
+      "line": 14,
+      "name": "Origin",
+      "public_methods": 0,
+      "lines": 10
+    },
+    {
+      "path": "reshog/models.py",
+      "line": 27,
+      "name": "Process",
+      "public_methods": 1,
+      "lines": 36
+    },
+    {
+      "path": "reshog/models.py",
+      "line": 66,
+      "name": "SystemMemory",
+      "public_methods": 0,
+      "lines": 12
+    },
+    {
+      "path": "reshog/models.py",
+      "line": 81,
+      "name": "SystemCpu",
+      "public_methods": 0,
+      "lines": 10
+    },
+    {
+      "path": "reshog/models.py",
+      "line": 94,
+      "name": "PsEntry",
+      "public_methods": 0,
+      "lines": 14
+    },
+    {
+      "path": "reshog/models.py",
+      "line": 111,
+      "name": "ProcessGroup",
+      "public_methods": 5,
+      "lines": 44
+    }
+  ]
+}

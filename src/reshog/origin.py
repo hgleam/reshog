@@ -6,11 +6,8 @@
 
 from pathlib import Path
 
+from .constants import GUI_APP_LABEL_PREFIX
 from .models import Origin
-
-# GUI アプリを起動したときに launchd が自動で付けるラベル(末尾に乱数が付く)。
-# COMMAND 列と同じことしか言わないので、由来としては出さない。
-_GUI_APP_LABEL_PREFIX = "application."
 
 
 def repo_root(cwd: str) -> Path | None:
@@ -88,6 +85,6 @@ def resolve(cwd: str | None, launchd_label: str | None) -> Origin | None:
     root = repo_root(cwd) if cwd else None
     if root is not None:
         return Origin(kind="git", name=root.name)
-    if launchd_label and not launchd_label.startswith(_GUI_APP_LABEL_PREFIX):
+    if launchd_label and not launchd_label.startswith(GUI_APP_LABEL_PREFIX):
         return Origin(kind="launchd", name=launchd_label)
     return None

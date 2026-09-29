@@ -4,16 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-# GPU/Metal 常駐(ps に出ない)判定のしきい値
-HIDDEN_GPU_MIN_MB = 2000
-HIDDEN_GPU_RSS_RATIO = 4
+from .constants import HIDDEN_GPU_MIN_MB, HIDDEN_GPU_RSS_RATIO
 
-# 並び順と、それを既定にするコマンド名の対応。
-#
-# **この 3 箇所の唯一の正本**にする: pyproject の entry point / cli の app 生成 /
-# render が出す「次に打つコマンド」の提案文。3 箇所に別々に書くと、コマンドを増やしたとき
-# 提案文だけ古いまま残る(何も壊れないので指摘されるまで気づけない)。
-COMMAND_BY_SORT: dict[str, str] = {"mem": "memhog", "cpu": "cpuhog"}
+# 表示の種類。processes = 通常(プロセス別) / app = --app / group = --group / project = --project。
+View = Literal["processes", "app", "group", "project"]
 
 
 @dataclass(frozen=True)

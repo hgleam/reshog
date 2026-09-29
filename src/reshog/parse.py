@@ -3,18 +3,9 @@
 外部コマンドを叩かないため単体テストが容易。書式変更への耐性はここで担保する。
 """
 
-import re
 
+from .constants import MEM_RE, UNIT_TO_MB
 from .models import PsEntry
-
-_MEM_RE = re.compile(r"^([0-9]+(?:\.[0-9]+)?)([GMKB]?)$")
-_UNIT_TO_MB: dict[str, float] = {
-    "G": 1024.0,
-    "M": 1.0,
-    "K": 1.0 / 1024,
-    "B": 1.0 / (1024 * 1024),
-    "": 1.0,
-}
 
 
 def parse_mem_to_mb(value: str) -> float:
@@ -32,10 +23,10 @@ def parse_mem_to_mb(value: str) -> float:
         ValueError: 解釈できない文字列のとき。
     """
     v = value.strip().rstrip("+-")
-    m = _MEM_RE.match(v)
+    m = MEM_RE.match(v)
     if not m:
         raise ValueError(f"unparseable mem value: {value!r}")
-    return float(m.group(1)) * _UNIT_TO_MB[m.group(2)]
+    return float(m.group(1)) * UNIT_TO_MB[m.group(2)]
 
 
 def parse_top_processes(output: str) -> list[tuple[int, float, float]]:
