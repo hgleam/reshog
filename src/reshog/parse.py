@@ -3,6 +3,7 @@
 外部コマンドを叩かないため単体テストが容易。書式変更への耐性はここで担保する。
 """
 
+import json
 
 from .constants import MEM_RE, UNIT_TO_MB
 from .models import PsEntry
@@ -258,3 +259,38 @@ def parse_ps_etime(output: str) -> dict[int, int]:
         if seconds is not None:
             elapsed[int(parts[0])] = seconds
     return elapsed
+
+
+def parse_llama_props(output: str) -> bool | None:
+    """llama-server の /props から休止中かどうかを取り出す。
+
+    Args:
+        output: /props の応答本文(JSON)。
+
+    Returns:
+        休止中なら True、稼働中なら False。取れなければ None。
+    """
+    try:
+        payload = json.loads(output)
+    except ValueError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    value = payload.get("is_sleeping")
+    return value if isinstance(value, bool) else None
+
+
+def parse_launchctl_stderr_path(output: str) -> str | None:
+    """`launchctl print` の出力から、標準エラーの書き先を取り出す。
+
+    Args:
+        output: launchctl print の標準出力。
+
+    Returns:
+        ファイルのパス。無ければ None。
+    """
+    for line in output.splitlines():
+        key, sep, value = line.strip().partition(" = ")
+        if sep and key == "stderr path" and value:
+            return value
+    return None

@@ -5,9 +5,9 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 from itertools import islice
 
-from . import aggregate, collect, group, origin, parse
+from . import aggregate, collect, group, llama, origin, parse
 from .constants import GROUP_SAMPLE_MARGIN, GROUP_SAMPLE_MIN
-from .models import Process, ProcessGroup, PsEntry, SystemCpu, SystemMemory
+from .models import LlmState, Process, ProcessGroup, PsEntry, SystemCpu, SystemMemory
 
 
 def build_processes(
@@ -216,15 +216,58 @@ def _annotate(processes: list[Process]) -> list[Process]:
         return processes
     elapsed = parse.parse_ps_etime(collect.process_elapsed([p.pid for p in processes]))
     now = _now()
-    return [
-        replace(
-            p,
-            started_at=(
-                now - timedelta(seconds=elapsed[p.pid]) if p.pid in elapsed else None
-            ),
+    return _with_llm_states(
+        [
+            replace(
+                p,
+                started_at=(
+                    now - timedelta(seconds=elapsed[p.pid]) if p.pid in elapsed else None
+                ),
+            )
+            for p in _with_origins(processes)
+        ]
+    )
+
+
+def _with_llm_states(processes: list[Process]) -> list[Process]:
+    """llama-server に休止状態を付ける(他のプロセスには何もしない)。
+
+    状態は /props の is_sleeping(読むだけで起こさない)。その状態になった時刻は、launchd の
+    ジョブならログの場所が分かるので、ログの最後の出入りを開始時刻に足して出す。
+    ログの最後の出入りが /props の状態と食い違う(ログが遅れている等)ときは、時刻を出さない。
+
+    Args:
+        processes: origin / started_at / launchd_service を埋めたプロセス。
+
+    Returns:
+        llm_state を埋めたプロセス(順序は保つ)。
+    """
+    result: list[Process] = []
+    for p in processes:
+        target = llama.endpoint(p.command)
+        sleeping = (
+            parse.parse_llama_props(collect.http_get(f"http://{target[0]}:{target[1]}/props"))
+            if target is not None
+            else None
         )
-        for p in _with_origins(processes)
-    ]
+        if sleeping is None:
+            result.append(p)
+            continue
+        result.append(replace(p, llm_state=LlmState(sleeping=sleeping, since=_since(p, sleeping))))
+    return result
+
+
+def _since(process: Process, sleeping: bool) -> datetime | None:
+    """いまの休止状態になった時刻をログから出す。分からなければ None(推測しない)。"""
+    if process.launchd_service is None or process.started_at is None:
+        return None
+    path = parse.parse_launchctl_stderr_path(collect.launchd_print(process.launchd_service))
+    if path is None:
+        return None
+    last = llama.last_transition(collect.read_tail(path))
+    if last is None or last[0] != sleeping:
+        return None
+    return process.started_at + last[1]
 
 
 def _with_origins(processes: list[Process]) -> list[Process]:

@@ -153,6 +153,8 @@ _DOC_NAMES_NOT_CONSTANTS = {
     "GITHUB_TOKEN": "CI の環境変数",
     "PID": "列名・用語",
     "WATCH_PATTERNS": "scripts/check-spec-freshness.sh の変数",
+    "LLAMA_ARG_HOST": "llama-server 側の環境変数(reshog は読まないと文書に書いている)",
+    "LLAMA_ARG_PORT": "llama-server 側の環境変数(同上)",
 }
 _DOC_CONSTANT = re.compile(r"`(_?[A-Z][A-Z0-9_]{2,})(?: = [^`]*)?`")
 

@@ -70,7 +70,7 @@ cpu_app = _build_app("cpuhog", "cpu", CPU_HELP)
   （一致したプロセスだけが合計に入る）。この場合は部分合計であることを表の見出しに出す。`--watch` とは併用可。
 - `--json`: `render.build_json` の出力（`system` と `processes[]`、各要素に `hidden_gpu` を含む）。
   各要素の `origin` は `{"kind": "git" | "launchd", "name": ...}` か `null`、`started_at` は
-  ローカル時刻の ISO 8601（秒まで）か `null`。`launchd_service` は止めるときに bootout へ渡すサービス名（`gui/<uid>/<ラベル>` / `system/<ラベル>`）か `null`。
+  ローカル時刻の ISO 8601（秒まで）か `null`。`llm_state` は llama-server の休止状態（`{"sleeping": bool, "since": ISO 8601 か null}`）か `null`。`launchd_service` は止めるときに bootout へ渡すサービス名（`gui/<uid>/<ラベル>` / `system/<ラベル>`）か `null`。
 - 停止の案内は `render.stop_command(process)` が唯一の正本（表の下の案内と `--kill` の警告の両方が使う）。
   launchd のジョブなら `launchctl bootout <shlex.quote したサービス名>`、それ以外は `kill <PID>`。
   ドメインは `launchctl list` を叩いた権限で決める（`collect.launchd_domain`: root なら `system`、他は `gui/<uid>`）。
