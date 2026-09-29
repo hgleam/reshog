@@ -187,22 +187,21 @@ def render_table(
         if about is not None:
             console.print(f"  [cyan]これは: {escape(about.purpose)}[/cyan]")
             console.print(f"  [cyan]{escape(about.advice)}[/cyan]")
-            if not about.stoppable:
-                console.print()
-                return
-        # 提案するのは「いま見ている並び順を再現するコマンド」。invoke されたコマンド名を
-        # そのまま使うと、memhog --sort cpu で見ているのに memhog --kill を勧めることになり、
-        # 開き直した画面の並びが変わる。
-        console.print(
-            f"  停止するなら:  [bold]{COMMAND_BY_SORT[order]} --kill[/bold]"
-            f"  または  [bold]{escape(stop_command(top))}[/bold]"
-        )
-        if top.launchd_service:
-            domain = origin.service_domain(top.launchd_service)
+        # 止めてはいけないもの(WindowServer 等)には停止の案内を出さない。
+        if about is None or about.stoppable:
+            # 提案するのは「いま見ている並び順を再現するコマンド」。invoke されたコマンド名を
+            # そのまま使うと、memhog --sort cpu で見ているのに memhog --kill を勧めることになり、
+            # 開き直した画面の並びが変わる。
             console.print(
-                "  [dim]launchd の常駐ジョブなので、kill しても起動し直されることがある"
-                f"(戻すときは launchctl bootstrap {escape(domain)} <plist のパス>)[/dim]"
+                f"  停止するなら:  [bold]{COMMAND_BY_SORT[order]} --kill[/bold]"
+                f"  または  [bold]{escape(stop_command(top))}[/bold]"
             )
+            if top.launchd_service:
+                domain = origin.service_domain(top.launchd_service)
+                console.print(
+                    "  [dim]launchd の常駐ジョブなので、kill しても起動し直されることがある"
+                    f"(戻すときは launchctl bootstrap {escape(domain)} <plist のパス>)[/dim]"
+                )
     console.print()
 
 

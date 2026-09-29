@@ -3,15 +3,16 @@
 対応表は constants.KNOWN_PROCESSES。ここは実行ファイル名で引くだけ。
 """
 
-from .constants import KNOWN_PROCESSES
+from .constants import KNOWN_PROCESS_DIRS, KNOWN_PROCESSES
 from .models import KnownProcess
 
 
 def describe(command: str) -> KnownProcess | None:
     """フルコマンドから、既知の OS のプロセスの説明を返す。
 
-    実行ファイル名(最初の語のパスの最後)で完全一致させる。部分一致にすると、
-    `python WindowServer.py` のような別物を OS のプロセスとして説明してしまう。
+    実行ファイル名(最初の語のパスの最後)で完全一致させ、置き場所も OS の場所に限る。
+    部分一致や名前だけの一致にすると、`python WindowServer.py` や `/tmp/mds` のような
+    別物を OS のプロセスとして説明してしまう。
 
     Args:
         command: フルコマンド文字列。
@@ -19,8 +20,10 @@ def describe(command: str) -> KnownProcess | None:
     Returns:
         説明。既知でなければ None。
     """
-    executable = command.split(" ", 1)[0].rsplit("/", 1)[-1]
-    entry = KNOWN_PROCESSES.get(executable)
+    path = command.split(" ", 1)[0]
+    if not path.startswith(KNOWN_PROCESS_DIRS):
+        return None
+    entry = KNOWN_PROCESSES.get(path.rsplit("/", 1)[-1])
     if entry is None:
         return None
     purpose, advice, stoppable = entry

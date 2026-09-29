@@ -46,6 +46,12 @@ class TestDescribe:
         assert found is not None and not found.stoppable
         assert "ログアウト" in found.advice
 
+    def test_spotlight_may_be_stopped_but_comes_back(self) -> None:
+        """止めても害は無いが、すぐ起動し直す。「止めない」と矛盾した表示にしない。"""
+        found = known.describe(MDS_STORES)
+        assert found is not None and found.stoppable
+        assert "起動し直す" in found.advice
+
     def test_vm_is_stopped_from_its_app(self) -> None:
         found = known.describe(VM)
         assert found is not None and found.stoppable
@@ -58,6 +64,9 @@ class TestDescribe:
             # 名前の一部が一致するだけのものを拾わない(実行ファイル名で比べる)
             "/usr/local/bin/my-WindowServer-tool",
             "python WindowServer.py",
+            # OS の置き場所の外にある同名のファイルは別物
+            "/tmp/mds",
+            "/Users/me/bin/launchd",
             "",
         ],
     )
@@ -85,6 +94,10 @@ class TestTable:
         out = _render(_proc(172, WINDOW_SERVER))
         assert "ⓘ" in cell(out, 172, "COMMAND")
         assert "止めない" in cell(out, 172, "COMMAND"), "止めてはいけないことも行に出す"
+
+    def test_spotlight_row_does_not_say_do_not_stop(self, cell) -> None:
+        cmd = cell(_render(_proc(316, MDS_STORES)), 316, "COMMAND")
+        assert "Spotlight" in cmd and "止めない" not in cmd
 
     def test_stoppable_one_does_not_say_do_not_stop(self, cell) -> None:
         assert "止めない" not in cell(_render(_proc(700, VM)), 700, "COMMAND")
@@ -122,6 +135,11 @@ class TestKill:
         out, sent = self._run(monkeypatch, _proc(172, WINDOW_SERVER))
         assert "ログアウト" in out
         assert sent == [172], "警告しても、利用者が確認したら送る(止める手段を奪わない)"
+
+    def test_stoppable_known_process_gets_no_warning(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        out, sent = self._run(monkeypatch, _proc(700, VM))
+        assert "ログアウト" not in out and "止めない" not in out
+        assert sent == [700]
 
     def test_plain_process_gets_no_warning(self, monkeypatch: pytest.MonkeyPatch) -> None:
         out, _ = self._run(monkeypatch, _proc(9, "/opt/homebrew/bin/llama-server"))
