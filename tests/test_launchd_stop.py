@@ -17,7 +17,7 @@ import typer
 from rich.console import Console
 
 from reshog import cli, collect, control, origin, report
-from reshog.models import Process, SystemCpu, SystemMemory
+from reshog.models import Origin, Process, SystemCpu, SystemMemory
 from reshog.render import build_json, render_table, stop_command
 
 _TOP = "PID MEM %CPU\n20193 4700M 0.0\n2299 900M 0.0\n"
@@ -48,6 +48,20 @@ class TestLaunchdService:
         OS のエージェントに勧めると再ログインまで機能が欠ける。
         """
         assert origin.launchd_service("com.apple.trustd.agent", "gui/501") is None
+        # PJ 列(由来)の表示は変えない: 止め方の案内から外すだけ。
+        assert origin.resolve("/", "com.apple.trustd.agent") == Origin(
+            kind="launchd", name="com.apple.trustd.agent"
+        )
+
+    @pytest.mark.parametrize(
+        ("service", "domain"),
+        [("gui/501/com.x", "gui/501"), ("system/com.x", "system"), ("gui/501/a/b", "gui/501")],
+    )
+    def test_domain_is_taken_by_shape_not_by_the_last_slash(
+        self, service: str, domain: str
+    ) -> None:
+        """ラベルに / が入っていても、ドメインを取り違えない(組み立てと同じ場所で分解する)。"""
+        assert origin.service_domain(service) == domain
 
 
 class TestReportAttachesJob:

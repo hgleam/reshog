@@ -95,6 +95,9 @@ GUI_APP_LABEL_PREFIX = "application."
 # 止め方の案内(launchd_service)からは外し、kill を案内する(PJ 列の表示はそのまま)。
 APPLE_LABEL_PREFIX = "com.apple."
 
+# launchctl のドメイン(サービス名の先頭)。launchd_domain が返す形と対になる。
+LAUNCHD_DOMAIN_RE = re.compile(r"^(system|gui/\d+)/")
+
 
 # --- 全プロセス走査の幅(report.py) ---
 

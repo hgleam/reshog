@@ -187,7 +187,7 @@ def render_table(
             f"  または  [bold]{escape(stop_command(top))}[/bold]"
         )
         if top.launchd_service:
-            domain = top.launchd_service.rsplit("/", 1)[0]
+            domain = origin.service_domain(top.launchd_service)
             console.print(
                 "  [dim]launchd の常駐ジョブなので、kill しても起動し直されることがある"
                 f"(戻すときは launchctl bootstrap {escape(domain)} <plist のパス>)[/dim]"
