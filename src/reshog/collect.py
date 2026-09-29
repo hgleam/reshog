@@ -1,12 +1,12 @@
-"""macOS の外部コマンド(top / ps / sysctl / memory_pressure)を叩く薄い I/O 層。
+"""macOS の外部コマンド(top / ps / lsof / launchctl / sysctl / memory_pressure)で状況を読む I/O 層。
 
-副作用を持つのはこのモジュールに限定し、解析ロジック(parse.py)から分離する。
+外部コマンドを叩くのはこのモジュールに限定し、解析ロジック(parse.py)から分離する。
+読むだけで何も変えない。プロセスを止める副作用は control.py に置く。
 """
 
-import os
-import signal
 import subprocess
-from typing import Literal
+
+from .constants import TOP_SAMPLES
 
 
 def _run(args: list[str]) -> str:
@@ -23,12 +23,6 @@ def _run(args: list[str]) -> str:
     except (OSError, ValueError):
         return ""
     return proc.stdout
-
-
-# top は 1 サンプル目の %CPU を必ず 0.0 で返す(前回サンプルとの差分が無いため)。
-# 2 サンプル取り、2 つ目だけを解析する。実測で +1.3 秒かかるが、表示している
-# %CPU が常に嘘という状態のほうが害が大きい。
-TOP_SAMPLES = 2
 
 
 def top_sample(count: int, order: str = "mem") -> str:
@@ -153,33 +147,3 @@ def memory_pressure() -> str:
         標準出力全体。取得できなければ空文字。
     """
     return _run(["memory_pressure"])
-
-
-def current_pid() -> int:
-    """reshog 自身の PID を返す。
-
-    Returns:
-        自プロセスの PID。
-    """
-    return os.getpid()
-
-
-def send_signal(pid: int, sig: signal.Signals) -> Literal["ok", "not_found", "denied"]:
-    """PID にシグナルを送る(プロセス停止の副作用をこの I/O 層に閉じる)。
-
-    os.kill の例外を制御フロー用の結果コードに翻訳し、握り潰さず呼び出し側へ伝える。
-
-    Args:
-        pid: 対象プロセス ID。
-        sig: 送信するシグナル(SIGTERM / SIGKILL 等)。
-
-    Returns:
-        "ok": 送信成功 / "not_found": プロセスが存在しない / "denied": 権限不足。
-    """
-    try:
-        os.kill(pid, sig)
-    except ProcessLookupError:
-        return "not_found"
-    except PermissionError:
-        return "denied"
-    return "ok"

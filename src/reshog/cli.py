@@ -20,26 +20,9 @@ from collections.abc import Callable
 import typer
 from rich.console import Console
 
-from . import __version__, collect, render, report
-from .models import COMMAND_BY_SORT, Process
-
-# 各コマンドの説明。--sort の既定以外は同じ CLI なので、違いが分かるように書き分ける。
-_MEM_HELP = """macOS の実メモリ(物理フットプリント)を食っているプロセスを特定して提示する。
-
-ps の RSS は Metal/MPS(GPU 共有メモリ)を数えないため、ComfyUI 等の ML 系は小さく見える。
-top の物理フットプリントでランクし、その乖離を「⚠ GPU/Metal常駐」印で炙り出す。
-
-CPU 順で見るなら cpuhog(または --sort cpu)。"""
-
-_CPU_HELP = """macOS の CPU を食っているプロセスを特定して提示する。
-
-1 プロセスずつ見ると数 % でも、同じものが何十個も動いていれば合計は跳ねる。
---group はヘルパープロセスを親子関係で合算するので、分散して埋もれる消費が見える。
-
-sys が user を大きく上回るときは、個々のプロセスの計算ではなくカーネル側の処理
-(プロセス生成の嵐・I/O・ページング)を疑う。
-
-実メモリ順で見るなら memhog(または --sort mem)。"""
+from . import __version__, control, render, report
+from .constants import COMMAND_BY_SORT, CPU_HELP, MEM_HELP
+from .models import Process, View
 
 
 def _make_version_callback(program: str) -> Callable[[bool], None]:
@@ -79,7 +62,7 @@ def _kill_process(
 
     target = next((p for p in processes if p.pid == pid), None)
     label = target.command if target else "(一覧外の PID)"
-    if pid <= 1 or pid == collect.current_pid():
+    if pid <= 1 or pid == control.current_pid():
         console.print("[red]その PID は停止できません(システム/自分自身)。[/red]")
         raise typer.Exit(code=1)
 
@@ -90,7 +73,7 @@ def _kill_process(
     ):
         console.print("中止しました。")
         return
-    result = collect.send_signal(pid, sig)
+    result = control.send_signal(pid, sig)
     if result == "not_found":
         console.print(f"[yellow]PID {pid} は存在しません(既に終了?)。[/yellow]")
         return
@@ -159,158 +142,161 @@ def _build_app(program: str, default_sort: str, help_text: str) -> typer.Typer:
     ) -> None:
         """上位プロセスを表示する(--help の文面は help_text 側が正本)。
 
-        併用制約を先に検査し、`--app` / `--group` / 通常 の 3 経路へ振り分ける。
+        併用制約を先に検査し、表示の種類を決めて `_render_view` に渡す。
         """
         console = Console()
 
-        if sort not in ("mem", "cpu"):
-            console.print("[red]--sort は mem か cpu を指定してください。[/red]")
+        error = _option_error(sort, group_by_app, by_project, app, kill, watch, json_out)
+        if error:
+            console.print(f"[red]{error}[/red]")
             raise typer.Exit(code=1)
 
-        if group_by_app and app is not None:
-            console.print(
-                "[red]--group と --app は併用できません(合計か内訳かを選んでください)。[/red]"
-            )
-            raise typer.Exit(code=1)
-
-        if by_project and (group_by_app or app is not None or kill):
-            console.print(
-                "[red]--project は --group / --app / --kill と併用できません"
-                "(合計の束ね方は 1 つ、停止対象は PID で選ぶため)。[/red]"
-            )
-            raise typer.Exit(code=1)
-
-        if group_by_app and kill:
-            console.print(
-                "[red]--group は --kill と併用できません"
-                "(停止対象は PID で選ぶ必要があるため)。[/red]"
-            )
-            raise typer.Exit(code=1)
-
+        view = _view_of(group_by_app, by_project, app)
         if watch is not None:
-            if json_out or kill:
-                console.print("[red]--watch は --json / --kill と併用できません。[/red]")
-                raise typer.Exit(code=1)
-            _run_watch(console, count, grep, watch, group_by_app, app, sort, by_project)
+            _run_watch(console, view, count, grep, sort, app, watch)
             return
 
-        if by_project:
-            _show_projects(console, count, grep, sort, json_out)
-            return
-
-        if app is not None:
-            processes, top_raw = report.build_app_processes(app, count, sort)
-            system = report.build_system_memory(top_raw)
-            cpu = report.build_system_cpu(top_raw)
-            if json_out:
-                typer.echo(render.build_json(processes, system, cpu))
-                return
-            render.render_table(console, processes, system, cpu, sort)
-            if kill:
-                _kill_process(processes, console, force, assume_yes)
-            return
-
-        if group_by_app:
-            groups, top_raw = report.build_groups(count, grep, sort)
-            system = report.build_system_memory(top_raw)
-            cpu = report.build_system_cpu(top_raw)
-            if json_out:
-                typer.echo(render.build_group_json(groups, system, cpu))
-                return
-            render.render_group_table(console, groups, system, cpu, grep, sort)
-            return
-
-        processes, top_raw = report.build_processes(count, grep, sort)
-        system = report.build_system_memory(top_raw)
-        cpu = report.build_system_cpu(top_raw)
-
-        if json_out:
-            typer.echo(render.build_json(processes, system, cpu))
-            return
-
-        render.render_table(console, processes, system, cpu, sort)
+        processes = _render_view(console, view, count, grep, sort, app, json_out)
         if kill:
             _kill_process(processes, console, force, assume_yes)
 
     return cli
 
 
-def _show_projects(
-    console: Console, count: int, grep: str | None, sort: str, json_out: bool = False
-) -> None:
-    """--project: PJ 別の合計を 1 回描画する(通常表示と --watch で共有)。
+def _option_error(
+    sort: str,
+    group_by_app: bool,
+    by_project: bool,
+    app: str | None,
+    kill: bool,
+    watch: float | None,
+    json_out: bool,
+) -> str | None:
+    """オプションの組み合わせを検査し、使えなければその理由を返す。
+
+    外部コマンドを叩く前に落とす(CI の Linux でもこの経路は検証できる)。
+
+    Returns:
+        エラーメッセージ。問題が無ければ None。
+    """
+    if sort not in ("mem", "cpu"):
+        return "--sort は mem か cpu を指定してください。"
+    if group_by_app and app is not None:
+        return "--group と --app は併用できません(合計か内訳かを選んでください)。"
+    if by_project and (group_by_app or app is not None or kill):
+        return (
+            "--project は --group / --app / --kill と併用できません"
+            "(合計の束ね方は 1 つ、停止対象は PID で選ぶため)。"
+        )
+    if group_by_app and kill:
+        return "--group は --kill と併用できません(停止対象は PID で選ぶ必要があるため)。"
+    if watch is not None and (json_out or kill):
+        return "--watch は --json / --kill と併用できません。"
+    return None
+
+
+def _view_of(group_by_app: bool, by_project: bool, app: str | None) -> View:
+    """オプションから表示の種類を決める(併用制約は検査済みの前提)。"""
+    if by_project:
+        return "project"
+    if group_by_app:
+        return "group"
+    if app is not None:
+        return "app"
+    return "processes"
+
+
+def _render_view(
+    console: Console,
+    view: View,
+    count: int,
+    grep: str | None,
+    sort: str,
+    app: str | None,
+    json_out: bool = False,
+    clear: bool = False,
+) -> list[Process]:
+    """表示を 1 回組み立てて出す(通常表示と --watch の唯一の入口)。
+
+    **データを集め終えてから画面を消す。** 全プロセスを走査する表示(--group / --project)は
+    数秒〜数十秒かかるので、先に消すとその間ずっと画面が空になる。
 
     Args:
         console: 出力先 Console。
-        count: 表示する PJ 数。
-        grep: 合算前に掛けるフィルタ。
+        view: 表示の種類。
+        count: 表示件数(集約ならグループ数)。
+        grep: フィルタ文字列(集約では合算前に掛かる)。
         sort: 並べる基準("mem" または "cpu")。
+        app: view="app" のときのアプリ名。
         json_out: True なら JSON を出す。
+        clear: True なら描画の直前に画面を消す(--watch)。
+
+    Returns:
+        表示したプロセス(--kill の選択肢)。集約の表示では空。
     """
-    projects, unknown, top_raw = report.build_projects(count, grep, sort)
+    if view == "project":
+        projects, unknown, top_raw = report.build_projects(count, grep, sort)
+    elif view == "group":
+        groups, top_raw = report.build_groups(count, grep, sort)
+    elif view == "app":
+        processes, top_raw = report.build_app_processes(app or "", count, sort)
+    else:
+        processes, top_raw = report.build_processes(count, grep, sort)
     system = report.build_system_memory(top_raw)
     cpu = report.build_system_cpu(top_raw)
+
+    if clear:
+        console.clear()
+    if view == "project":
+        if json_out:
+            typer.echo(render.build_project_json(projects, unknown, system, cpu))
+        else:
+            render.render_project_table(console, projects, unknown, system, cpu, grep, sort)
+        return []
+    if view == "group":
+        if json_out:
+            typer.echo(render.build_group_json(groups, system, cpu))
+        else:
+            render.render_group_table(console, groups, system, cpu, grep, sort)
+        return []
     if json_out:
-        typer.echo(render.build_group_json(projects, system, cpu, "project", unknown))
-        return
-    render.render_group_table(console, projects, system, cpu, grep, sort, "project", unknown)
+        typer.echo(render.build_json(processes, system, cpu))
+    else:
+        render.render_table(console, processes, system, cpu, sort)
+    return processes
 
 
 def _run_watch(
     console: Console,
+    view: View,
     count: int,
     grep: str | None,
+    sort: str,
+    app: str | None,
     interval: float,
-    group_by_app: bool = False,
-    app: str | None = None,
-    sort: str = "mem",
-    by_project: bool = False,
 ) -> None:
     """--watch: 一定間隔で画面を再描画し続ける。
 
     Args:
         console: 出力先 Console。
+        view: 表示の種類。
         count: 表示件数。
         grep: フィルタ文字列。
-        interval: 更新間隔(秒)。
-        group_by_app: True ならアプリ単位に合算して描画する。
-        app: 指定時はそのアプリに属するプロセスだけを描画する。
         sort: 並べる基準("mem" または "cpu")。
-        by_project: True なら PJ 別に合算して描画する。
+        app: view="app" のときのアプリ名。
+        interval: 更新間隔(秒)。
     """
     try:
         while True:
-            if by_project:
-                console.clear()
-                _show_projects(console, count, grep, sort)
-                console.print(f"[dim]{interval:g}秒ごとに更新 / Ctrl-C で終了[/dim]")
-                time.sleep(interval)
-                continue
-            if group_by_app:
-                groups, top_raw = report.build_groups(count, grep, sort)
-                system = report.build_system_memory(top_raw)
-                cpu = report.build_system_cpu(top_raw)
-                console.clear()
-                render.render_group_table(console, groups, system, cpu, grep, sort)
-                console.print(f"[dim]{interval:g}秒ごとに更新 / Ctrl-C で終了[/dim]")
-                time.sleep(interval)
-                continue
-            if app is not None:
-                processes, top_raw = report.build_app_processes(app, count, sort)
-            else:
-                processes, top_raw = report.build_processes(count, grep, sort)
-            system = report.build_system_memory(top_raw)
-            cpu = report.build_system_cpu(top_raw)
-            console.clear()
-            render.render_table(console, processes, system, cpu, sort)
+            _render_view(console, view, count, grep, sort, app, clear=True)
             console.print(f"[dim]{interval:g}秒ごとに更新 / Ctrl-C で終了[/dim]")
             time.sleep(interval)
     except KeyboardInterrupt:
         console.print("\n終了しました。")
 
 
-app = _build_app(COMMAND_BY_SORT["mem"], "mem", _MEM_HELP)
-cpu_app = _build_app(COMMAND_BY_SORT["cpu"], "cpu", _CPU_HELP)
+app = _build_app(COMMAND_BY_SORT["mem"], "mem", MEM_HELP)
+cpu_app = _build_app(COMMAND_BY_SORT["cpu"], "cpu", CPU_HELP)
 
 
 if __name__ == "__main__":

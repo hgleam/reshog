@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from reshog import collect, group, origin, report
+from reshog import aggregate, collect, origin, report
 from reshog.models import Origin, Process, ProcessGroup, SystemCpu, SystemMemory
-from reshog.render import build_group_json, render_group_table
+from reshog.render import build_project_json, render_project_table
 
 _TOP = """\
 PID    MEM   %CPU
@@ -125,7 +125,7 @@ class TestBucketProcesses:
             Process(pid=1, mem_mb=10, rss_mb=1, cpu=0.0, command="a"),
             Process(pid=2, mem_mb=30, rss_mb=1, cpu=0.0, command="b"),
         ]
-        got = group.bucket_processes(procs, lambda p: "x", "mem")
+        got = aggregate.bucket_processes(procs, lambda p: "x", "mem")
         assert [(g.label, g.total_mb, g.largest.pid) for g in got] == [("x", 40, 2)]
 
 
@@ -143,14 +143,7 @@ class TestRender:
     def _text(self, unknown: ProcessGroup | None) -> str:
         buffer = io.StringIO()
         console = Console(file=buffer, width=200, no_color=True, highlight=False)
-        render_group_table(
-            console,
-            [_group("tokyo-calendar", 6000)],
-            _SYSTEM,
-            _CPU,
-            kind="project",
-            unknown=unknown,
-        )
+        render_project_table(console, [_group("tokyo-calendar", 6000)], unknown, _SYSTEM, _CPU)
         return buffer.getvalue()
 
     def test_header_says_pj(self, cell) -> None:
@@ -169,13 +162,7 @@ class TestRender:
 
     def test_json(self) -> None:
         payload = json.loads(
-            build_group_json(
-                [_group("tokyo-calendar", 6000)],
-                _SYSTEM,
-                _CPU,
-                kind="project",
-                unknown=_group("-", 9000),
-            )
+            build_project_json([_group("tokyo-calendar", 6000)], _group("-", 9000), _SYSTEM, _CPU)
         )
         assert payload["projects"][0]["label"] == "tokyo-calendar"
         assert payload["unknown"] == {"total_mb": 9000, "total_cpu": 0.0, "count": 1}

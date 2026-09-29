@@ -1,17 +1,13 @@
 """collect と parse を組み合わせ、プロセス一覧とシステム状況を構築する。"""
 
+from collections.abc import Callable, Iterator
 from dataclasses import replace
 from datetime import datetime, timedelta
+from itertools import islice
 
-from . import collect, group, origin, parse
+from . import aggregate, collect, group, origin, parse
+from .constants import GROUP_SAMPLE_MARGIN, GROUP_SAMPLE_MIN
 from .models import Process, ProcessGroup, PsEntry, SystemCpu, SystemMemory
-
-# --group は「分散して埋もれているアプリ」を探すのが目的なので、全プロセスを走査する。
-# 走査幅は ps の実プロセス数から決める(固定上限にすると、超えた分が黙って合計から落ちる)。
-# 実測: このマシンで 1065 プロセス。上限 500 では合計の半分が消えていた。
-GROUP_SAMPLE_MIN = 100
-# ps を撮ってから top を撮るまでに増えたプロセスのぶんの余裕。
-GROUP_SAMPLE_MARGIN = 50
 
 
 def build_processes(
@@ -36,26 +32,9 @@ def build_processes(
         sample_count = 40 if pattern else count
     raw = collect.top_sample(sample_count, order)
 
-    needle = pattern.lower() if pattern else None
-    result: list[Process] = []
-    for pid, mem_mb, cpu in parse.parse_top_processes(raw):
-        command = collect.ps_command(pid)
-        if not command:
-            continue
-        if needle is not None and needle not in command.lower():
-            continue
-        result.append(
-            Process(
-                pid=pid,
-                mem_mb=round(mem_mb),
-                rss_mb=collect.ps_rss_mb(pid),
-                cpu=cpu,
-                command=command,
-            )
-        )
-        if len(result) >= count:
-            break
-    return _annotate(result), raw
+    # 上位 N 件しか見ないので、ps は候補ごとに叩く(RSS は絞り込みに通ったものだけ)。
+    found = _processes_from_top(raw, collect.ps_command, collect.ps_rss_mb, pattern)
+    return _annotate(list(islice(found, count))), raw
 
 
 def build_system_memory(top_raw: str) -> SystemMemory:
@@ -133,10 +112,10 @@ def build_projects(
     processes = _with_origins(processes)
     known = [p for p in processes if p.origin is not None]
     unknown = [p for p in processes if p.origin is None]
-    projects = group.bucket_processes(
+    projects = aggregate.bucket_processes(
         known, lambda p: origin.label(p.origin) if p.origin else "-", order
     )
-    unknown_total = group.bucket_processes(unknown, lambda p: "-", order)
+    unknown_total = aggregate.bucket_processes(unknown, lambda p: "-", order)
     return projects[:count], (unknown_total[0] if unknown_total else None), raw
 
 
@@ -157,24 +136,46 @@ def _scan_all(
         max(len(snapshot) + GROUP_SAMPLE_MARGIN, GROUP_SAMPLE_MIN), order
     )
 
-    needle = pattern.lower() if pattern else None
-    processes: list[Process] = []
-    for pid, mem_mb, cpu in parse.parse_top_processes(raw):
-        entry = snapshot.get(pid)
-        if entry is None or not entry.command:
-            continue
-        if needle is not None and needle not in entry.command.lower():
-            continue
-        processes.append(
-            Process(
-                pid=pid,
-                mem_mb=round(mem_mb),
-                rss_mb=entry.rss_mb,
-                cpu=cpu,
-                command=entry.command,
-            )
+    # 全プロセスが対象なので、コマンドと RSS は一括で撮った ps から引く。
+    processes = list(
+        _processes_from_top(
+            raw,
+            lambda pid: entry.command if (entry := snapshot.get(pid)) else "",
+            lambda pid: entry.rss_mb if (entry := snapshot.get(pid)) else 0,
+            pattern,
         )
+    )
     return processes, snapshot, raw
+
+
+def _processes_from_top(
+    raw: str,
+    command_of: Callable[[int], str],
+    rss_of: Callable[[int], int],
+    pattern: str | None,
+) -> Iterator[Process]:
+    """top の行を順に Process にする(コマンドが取れないものと、pattern に合わないものは飛ばす)。
+
+    上位 N 件の表示と全プロセスの走査は、コマンドと RSS の引き方だけが違う。
+    飛ばす条件と Process の作り方を 1 か所に置く。
+
+    Args:
+        raw: top の生出力。
+        command_of: PID からフルコマンドを返す(取れなければ空文字)。
+        rss_of: PID から ps の RSS(MB)を返す。絞り込みに通ったものだけに呼ぶ。
+        pattern: フルコマンドに対する部分一致(大文字小文字無視)。None なら全件対象。
+
+    Yields:
+        top の並び順どおりの Process。
+    """
+    needle = pattern.lower() if pattern else None
+    for pid, mem_mb, cpu in parse.parse_top_processes(raw):
+        command = command_of(pid)
+        if not command:
+            continue
+        if needle is not None and needle not in command.lower():
+            continue
+        yield Process(pid=pid, mem_mb=round(mem_mb), rss_mb=rss_of(pid), cpu=cpu, command=command)
 
 
 def build_app_processes(
@@ -193,31 +194,10 @@ def build_app_processes(
     Returns:
         (Process のリスト, top の生出力) のタプル。
     """
-    snapshot = parse.parse_ps_snapshot(collect.ps_snapshot())
-    raw = collect.top_sample(
-        max(len(snapshot) + GROUP_SAMPLE_MARGIN, GROUP_SAMPLE_MIN), order
-    )
-
+    processes, snapshot, raw = _scan_all(None, order)
     needle = label.lower()
-    result: list[Process] = []
-    for pid, mem_mb, cpu in parse.parse_top_processes(raw):
-        entry = snapshot.get(pid)
-        if entry is None or not entry.command:
-            continue
-        if group.group_label(pid, snapshot).lower() != needle:
-            continue
-        result.append(
-            Process(
-                pid=pid,
-                mem_mb=round(mem_mb),
-                rss_mb=entry.rss_mb,
-                cpu=cpu,
-                command=entry.command,
-            )
-        )
-        if len(result) >= count:
-            break
-    return _annotate(result), raw
+    mine = (p for p in processes if group.group_label(p.pid, snapshot).lower() == needle)
+    return _annotate(list(islice(mine, count))), raw
 
 
 def _annotate(processes: list[Process]) -> list[Process]:

@@ -7,14 +7,17 @@
 
 | モジュール | 役割 | 副作用 |
 |-----------|------|--------|
-| `collect.py` | `top` / `ps` / `sysctl` / `memory_pressure` / `lsof` / `launchctl` を叩く薄い I/O 層。プロセス停止（`send_signal` = `os.kill`）・自 PID 取得（`current_pid`）もここに集約 | あり（subprocess / os.kill） |
+| `collect.py` | `top` / `ps` / `sysctl` / `memory_pressure` / `lsof` / `launchctl` で状況を読む薄い I/O 層。読むだけで何も変えない | あり（subprocess） |
+| `control.py` | プロセスの停止（`send_signal` = `os.kill`）と自 PID 取得（`current_pid`）。取り消せない副作用をここに閉じる | あり（os.kill） |
 | `parse.py` | top・memory_pressure の出力を解析する純粋関数群 | なし |
-| `models.py` | ドメインモデル（`Process` / `PsEntry` / `ProcessGroup` / `SystemMemory`）と判定ロジック | なし |
+| `models.py` | 型の置き場。ドメインモデル（`Process` / `PsEntry` / `ProcessGroup` / `SystemMemory` / `Origin`）・表示の種類（`View`）と判定ロジック | なし |
+| `constants.py` | 定数の唯一の置き場（しきい値・コマンド名・`--help` の説明文）。実装のファイル・型の置き場には定数を置かない | なし |
 | `origin.py` | 作業ディレクトリ・launchd ジョブ名から由来（`Origin`）を決める（`repo_root` / `resolve`）。worktree は `.git` ファイルの gitdir をたどって本体のリポへ寄せる | あり（ファイルシステムの読み取りのみ） |
-| `group.py` | プロセスをアプリ単位へ集約する純粋関数群（`app_label` / `group_label` / `group_processes`） | なし |
+| `group.py` | アプリ名の決め方（`app_label` / `group_label`）と、それをキーにしたアプリ別の集約（`group_processes`） | なし |
+| `aggregate.py` | プロセスを名前で束ねて合計し順位を付ける（`bucket_processes`）。アプリ別・PJ 別で共有 | なし |
 | `report.py` | `collect` × `parse` を組み合わせて一覧・システム状況を構築 | あり（collect 経由） |
 | `render.py` | `Process` / `SystemMemory` を表 / JSON に整形（`format_mb` 等の整形関数もここ） | なし（出力のみ） |
-| `cli.py` | typer エントリ・オプション制御・`--kill` / `--watch`（プロンプト等 UI のみ。プロセス停止は collect に委譲） | あり（UI 入出力のみ） |
+| `cli.py` | typer エントリ・オプション制御（`_option_error`）・表示の振り分け（`_render_view` が通常表示と `--watch` の唯一の入口）・`--kill` の対話（停止は control に委譲） | あり（UI 入出力のみ） |
 
 ## データフロー
 
@@ -51,11 +54,12 @@ cli.main
             └─ group.group_label(pid, snapshot)     # 親をたどりアプリ名を決める
      → list[ProcessGroup], top の生出力
   └─ render.render_group_table(...) / render.build_group_json(...)
+     （PJ 別は render.render_project_table / render.build_project_json。表の本体は _render_totals を共有）
 ```
 
 `--project` 指定時（PJ 別の合計）: `report.build_projects` が `--group` と同じ全プロセス走査
 （`report._scan_all`）を使い、`report._with_origins` で PJ 列と同じ由来を付けてから
-`group.bucket_processes` で束ねる。`--group` の `group_processes` も同じ `bucket_processes` に
+`aggregate.bucket_processes` で束ねる。`--group` の `group_processes` も同じ `bucket_processes` に
 キー（`group_label`）を渡しているだけなので、合計・並べ方の規則は 1 か所にある。
 PJ の表記は `origin.label` が正本（PJ 列の表示と束ねるキーが同じ文字列になる）。
 PJ 不明のプロセスは順位に入れず、別の `ProcessGroup` として返す。
@@ -70,14 +74,15 @@ PJ 不明のプロセスは順位に入れず、別の `ProcessGroup` として�
   `build_system_memory` に渡すことで top の二重起動を避ける。
 - **エラーは握り潰さず空を返す**: `collect._run` は `OSError` / `ValueError` を捕捉して空文字を返し、
   取得できたぶんだけ表示する（診断ツールとして「一部欠損でも動く」ことを優先）。
-- **副作用は I/O 層（collect.py）に一元化**: プロセス停止の `os.kill` も `collect.send_signal` に集約し、
+- **読む I/O と止める副作用を分ける**: 外部コマンドで状況を読むのは collect.py、プロセス停止の `os.kill` は
+  control.py の `send_signal` に閉じ、
   `ProcessLookupError` / `PermissionError` を `"not_found"` / `"denied"` の結果コードに翻訳して返す。
   cli.py は結果コードに応じてメッセージを出すだけ（副作用を持たない）。整形（`format_mb`）は解析(parse)ではなく
   render に置く。この分離により kill/整形とも純粋 or モック可能で単体テストできる。
 - **集約は親子関係で行う（コマンド名の一致ではない）**: Chromium ヘルパーの実行ファイル名は
   起動元アプリと無関係（例: ixBrowser 配下の実体は `Chromium.app`）なので、名前で束ねると
   別アプリとして散る。`group_label` は最上位の祖先まで遡り、シェル・端末・多重化ツール
-  （`_TRANSPARENT`: zsh / tmux 等）でない最初のものをアプリとみなす。この「器は素通りする」
+  （`constants.TRANSPARENT`: zsh / tmux 等）でない最初のものをアプリとみなす。この「器は素通りする」
   規則が無いと、tmux 配下の CLI が全部 tmux に吸われる（実測でそうなった）。
 - **内訳（`--app`）も ancestry で絞る**: `-g` はコマンド文字列の部分一致なので、実行ファイル名に
   親アプリ名を含まない子プロセス（`node .../mcp-server` 等）を取りこぼす。合計と内訳で判定規則が

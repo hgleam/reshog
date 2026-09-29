@@ -136,7 +136,7 @@ class TestCommandTableIsTheSingleSource:
     def test_matches_pyproject_entry_points(self) -> None:
         import os
 
-        from reshog.models import COMMAND_BY_SORT
+        from reshog.constants import COMMAND_BY_SORT
 
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         with open(os.path.join(root, "pyproject.toml"), encoding="utf-8") as fh:
@@ -145,7 +145,7 @@ class TestCommandTableIsTheSingleSource:
             assert f'{command} = "reshog.cli:' in content, command
 
     def test_sort_keys_are_the_accepted_values(self) -> None:
-        from reshog.models import COMMAND_BY_SORT
+        from reshog.constants import COMMAND_BY_SORT
 
         assert set(COMMAND_BY_SORT) == {"mem", "cpu"}
 
