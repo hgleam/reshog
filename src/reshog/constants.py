@@ -140,3 +140,39 @@ sys が user を大きく上回るときは、個々のプロセスの計算で�
 (プロセス生成の嵐・I/O・ページング)を疑う。
 
 実メモリ順で見るなら memhog(または --sort mem)。"""
+
+
+# --- OS のプロセスの説明(known.py) ---
+
+# 上位に出る macOS のプロセスに「何のためのものか・止めてよいか」を添える。
+# キーは実行ファイル名(パスの最後)。値は (何のためのものか, どうするか, 止めてよいか)。
+# 名前だけでは何か分からず、案内どおり kill すると画面が落ちる(WindowServer)ため
+# (2026-09-29 に「これは何？」と聞かれた)。表に出るもの(非 root でコマンドが読めるもの)に限る。
+SPOTLIGHT_NOTE = (
+    "Spotlight の索引づくり",
+    "止めても起動し直す。索引が終わるのを待つか、システム設定の Spotlight で重いフォルダを除外する",
+    False,
+)
+KNOWN_PROCESSES: dict[str, tuple[str, str, bool]] = {
+    "WindowServer": (
+        "macOS の画面描画",
+        (
+            "止めない。ウィンドウ・メニューバー・Dock をすべて描いているので、"
+            "止めると画面が落ちてログアウトと同じになる"
+        ),
+        False,
+    ),
+    "launchd": (
+        "macOS の全プロセスの親",
+        "止められない。OS そのものが止まる",
+        False,
+    ),
+    "mds": SPOTLIGHT_NOTE,
+    "mds_stores": SPOTLIGHT_NOTE,
+    "mdworker_shared": SPOTLIGHT_NOTE,
+    "com.apple.Virtualization.VirtualMachine": (
+        "仮想マシン(Docker Desktop 等)",
+        "止めるなら起動元のアプリ(Docker Desktop 等)を終了する",
+        True,
+    ),
+}
