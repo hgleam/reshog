@@ -25,6 +25,11 @@ VM = (
     "/System/Library/Frameworks/Virtualization.framework/Versions/A/XPCServices/"
     "com.apple.Virtualization.VirtualMachine.xpc/Contents/MacOS/com.apple.Virtualization.VirtualMachine"
 )
+# 2026-10-12 に cpuhog の 1 位に出た(CPU 36〜80%)。
+XPROTECT = (
+    "/System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/"
+    "XprotectService.xpc/Contents/MacOS/XprotectService"
+)
 
 
 class TestDescribe:
@@ -35,6 +40,7 @@ class TestDescribe:
             ("/sbin/launchd", "親"),
             (MDS_STORES, "Spotlight"),
             (VM, "仮想マシン"),
+            (XPROTECT, "マルウェア"),
         ],
     )
     def test_known(self, command: str, word: str) -> None:
@@ -56,6 +62,18 @@ class TestDescribe:
         found = known.describe(VM)
         assert found is not None and found.stoppable
         assert "Docker" in found.advice
+
+    def test_xprotect_points_to_developer_tools_not_kill(self) -> None:
+        """kill してもすぐ起動し直す。減らす手はデベロッパツールへの登録と起動し直し。"""
+        found = known.describe(XPROTECT)
+        assert found is not None and not found.stoppable
+        for word in ("起動し直す", "デベロッパツール", "署名"):
+            assert word in found.advice, word
+
+    def test_xprotect_advice_tells_how_to_confirm(self) -> None:
+        """効いたかを利用者が自分で確かめられるよう、確認のコマンドを添える。"""
+        found = known.describe(XPROTECT)
+        assert found is not None and "Putting executable into provenance" in found.advice
 
     @pytest.mark.parametrize(
         "command",
@@ -98,6 +116,12 @@ class TestTable:
     def test_spotlight_row_does_not_say_do_not_stop(self, cell) -> None:
         cmd = cell(_render(_proc(316, MDS_STORES)), 316, "COMMAND")
         assert "Spotlight" in cmd and "止めない" not in cmd
+
+    def test_xprotect_row_says_do_not_stop_and_footer_has_no_kill(self, cell) -> None:
+        out = _render(_proc(51166, XPROTECT))
+        assert "止めない" in cell(out, 51166, "COMMAND")
+        assert "デベロッパツール" in out
+        assert "kill 51166" not in out
 
     def test_stoppable_one_does_not_say_do_not_stop(self, cell) -> None:
         assert "止めない" not in cell(_render(_proc(700, VM)), 700, "COMMAND")
