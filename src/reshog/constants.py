@@ -180,6 +180,23 @@ KNOWN_PROCESSES: dict[str, tuple[str, str, bool]] = {
         "止めるなら起動元のアプリ(Docker Desktop 等)を終了する。強制終了すると中の作業が失われうる",
         True,
     ),
+    # 2026-10-12 に 1 位に出た(CPU 36〜80%・5 時間で 70 分)。syspolicyd が署名の無い
+    # 実行ファイルを 1 分に約 280 件検査に回していた。WezTerm をデベロッパツールに登録して
+    # 再起動すると 0〜24 件に減った。
+    "XprotectService": (
+        "macOS のマルウェア検査(Gatekeeper の XProtect)",
+        (
+            "止めない。kill してもすぐ起動し直す。重いのは、署名の無い実行ファイル"
+            "(ビルド成果物・venv・フック等)が実行のたびに検査されるため。"
+            "減らすには、端末アプリをシステム設定 → プライバシーとセキュリティ →"
+            " デベロッパツールに登録し、端末アプリ(と tmux サーバ)を起動し直す"
+            "(launchd から起動される常駐には効かない)。"
+            "効いたかは `log show --last 1m --predicate 'process == \"syspolicyd\"'"
+            " | grep -c 'Putting executable into provenance'` の件数(1 分あたり)が"
+            "数十件以下かで見る"
+        ),
+        False,
+    ),
 }
 
 
