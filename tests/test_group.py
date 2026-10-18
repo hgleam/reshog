@@ -27,6 +27,9 @@ class TestAppLabel:
             ("node /Users/x/.npm/_npx/abc/node_modules/.bin/playwright-mcp", "playwright-mcp"),
             ("/usr/bin/python main.py --port 8188", "main.py"),
             ("/usr/bin/python3 -m uvicorn tokyocal.web:app", "uvicorn"),
+            # -c / -e の次はコードで、スクリプト名ではない(「import」と出ていた)。
+            ("/usr/bin/python3 -u -c import sys;exec(eval(x))", "python3 -c"),
+            ("node -e console.log(1)", "node -e"),
             ("", "?"),
         ],
     )

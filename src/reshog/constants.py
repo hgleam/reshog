@@ -60,6 +60,10 @@ INTERPRETERS = frozenset(
     }
 )
 
+# インタプリタにコードを直接渡すフラグ。次の引数はコードなので、スクリプト名として採らない
+# (`python -c "import sys;…"` が「import」と表示されていた)。
+INLINE_CODE_FLAGS = frozenset({"-c", "-e", "--eval"})
+
 # 親としてたどっても意味を持たない「器」。ここで止めるとシェルや端末に全部吸われる。
 TRANSPARENT = frozenset(
     {
@@ -128,6 +132,9 @@ CHURN_TOP_CHILDREN = 3
 
 # 親がどのサンプルにも写らなかったもの(親も一瞬で終わった等)の束ね先。PID 0 は実在しない。
 CHURN_UNKNOWN_PARENT = 0
+
+# ps がゾンビ(終わったが親がまだ回収していないプロセス)のコマンド欄に出す文字列。
+DEFUNCT = "<defunct>"
 
 # launchd の PID。親が先に終わった子はここへ付け替わる(起動元の表記で断る)。
 LAUNCHD_PID = 1

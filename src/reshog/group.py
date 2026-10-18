@@ -6,7 +6,7 @@ Chromium 系ブラウザや MCP サーバはヘルパープロセスへ分散す
 """
 
 from . import aggregate
-from .constants import INTERPRETERS, TRANSPARENT
+from .constants import INLINE_CODE_FLAGS, INTERPRETERS, TRANSPARENT
 from .models import Process, ProcessGroup, PsEntry
 
 
@@ -53,6 +53,9 @@ def app_label(command: str) -> str:
         return "?"
     if base in INTERPRETERS or bundle in INTERPRETERS:
         for arg in argv[1:]:
+            # 次の引数がコード(`python -c "import …"`)なら、スクリプト名は無い。
+            if arg in INLINE_CODE_FLAGS:
+                return f"{base} {arg}"
             if arg.startswith("-"):
                 continue
             return arg.rsplit("/", 1)[-1]
