@@ -1,5 +1,6 @@
 """reshog のドメインモデル。"""
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
@@ -139,6 +140,70 @@ class PsEntry:
     ppid: int
     rss_mb: int
     command: str
+
+
+@dataclass(frozen=True)
+class ChurnSource:
+    """短命プロセスを生み続けている 1 つの起動元(数え始めから動いていた親)。
+
+    Attributes:
+        pid: 起動元の PID。親がどのサンプルにも写らなかったものは constants.CHURN_UNKNOWN_PARENT。
+        command: 起動元のフルコマンド。親不明なら空文字。
+        origin: 起動元の由来のプロジェクト。判別できなければ None。
+        children: 生まれたプロセスの名前(生まれた順。重複を含む)。
+    """
+
+    pid: int
+    command: str
+    origin: Origin | None
+    children: tuple[str, ...]
+
+    @property
+    def count(self) -> int:
+        """生まれた本数。"""
+        return len(self.children)
+
+    def main_children(self, limit: int) -> str:
+        """多い順に名前と本数を並べる(「bash×3, gh×2, ほか 1」)。
+
+        並べなかった名前の本数は「ほか N」で足す(行の本数と中身の合計を合わせる)。
+
+        Args:
+            limit: 並べる名前の数。
+
+        Returns:
+            表示する文字列。
+        """
+        ranked = Counter(self.children).most_common()
+        shown = [f"{name}×{n}" for name, n in ranked[:limit]]
+        rest = sum(n for _, n in ranked[limit:])
+        return ", ".join(shown + ([f"ほか {rest}"] if rest else []))
+
+
+@dataclass(frozen=True)
+class Churn:
+    """数秒のあいだに新しく生まれたプロセスの集計。
+
+    top の 2 サンプルの間に生まれて終わるプロセスは CPU の一覧に一度も出ない。
+    負荷平均が高いのに一覧が静かなときの原因は、ここでしか見えない。
+
+    Attributes:
+        seconds: 実際に数えた時間(秒)。
+        sources: 起動元ごとの内訳(本数の多い順)。
+    """
+
+    seconds: float
+    sources: tuple[ChurnSource, ...]
+
+    @property
+    def total(self) -> int:
+        """捉えた本数の合計(サンプルの間で生まれて終わったものは数えられないので下限)。"""
+        return sum(s.count for s in self.sources)
+
+    @property
+    def per_second(self) -> float:
+        """1 秒あたりの本数。"""
+        return self.total / self.seconds if self.seconds > 0 else 0.0
 
 
 @dataclass(frozen=True)
