@@ -64,6 +64,18 @@ INTERPRETERS = frozenset(
 # (`python -c "import sys;…"` が「import」と表示されていた)。
 INLINE_CODE_FLAGS = frozenset({"-c", "-e", "--eval"})
 
+# 短命プロセスの中身の名前で、器として素通りするもの(中で動かしているスクリプトの名前を出す)。
+# pyenv の shim は `bash …/pyenv-exec`・`/usr/bin/env bash …/pyenv` の形で、器の名前で出すと
+# 「bash×197, env×42」になり原因が隠れる(2026-10-18)。
+SCRIPT_SHELLS = frozenset({"sh", "bash", "zsh"})
+ENV_COMMAND = "env"
+
+# 値を取るので、次の引数をコマンドと取り違えないフラグ(env -u VAR / bash -o pipefail)。
+ENV_VALUE_FLAGS = frozenset({"-u", "-C", "-P"})
+SHELL_VALUE_FLAGS = frozenset({"-o", "-O", "+o", "+O"})
+# env -S の後ろは 1 つの文字列を割ったコマンド。
+ENV_SPLIT_FLAG = "-S"
+
 # 親としてたどっても意味を持たない「器」。ここで止めるとシェルや端末に全部吸われる。
 TRANSPARENT = frozenset(
     {

@@ -111,6 +111,9 @@ MEM がパース不能な行はスキップ。CPU がパース不能なら 0.0�
 - 本数は**下限**（ps を撮る間に生まれて終わったものは数えられない）。表示も「N 本以上」と書く。
 - 表は起動元の上位 `CHURN_TOP_SOURCES` 件で、残りは「ほか N 起動元」の 1 行に足す
   （行の合計が見出しの本数と合うように）。中身は名前の多い順に `CHURN_TOP_CHILDREN` 個で、残りは「ほか N」（中身の合計が行の本数と合うように）。
+- 中身の名前は、シェルと `env` を素通りして中で動かしているスクリプトの名前にする（`churn.child_name`）。
+  pyenv の shim（`bash …/pyenv-exec`・`/usr/bin/env bash …/pyenv`）が「bash×197, env×42」と出て、
+  原因の名前が表から隠れていた。`--group` のアプリ名の決め方（`app_label`）は変えない。
 - PJ は起動元にだけ付ける（`report._with_origins` を起動元のプロセスに掛ける。lsof は 1 回）。
 
 ### `format_mb(mb)`

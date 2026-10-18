@@ -7,7 +7,16 @@
 
 from collections.abc import Iterable
 
-from .constants import CHURN_MAX_DEPTH, CHURN_UNKNOWN_PARENT, DEFUNCT
+from .constants import (
+    CHURN_MAX_DEPTH,
+    CHURN_UNKNOWN_PARENT,
+    DEFUNCT,
+    ENV_COMMAND,
+    ENV_SPLIT_FLAG,
+    ENV_VALUE_FLAGS,
+    SCRIPT_SHELLS,
+    SHELL_VALUE_FLAGS,
+)
 from .group import app_label
 from .models import PsEntry
 
@@ -92,4 +101,63 @@ def child_name(command: str) -> str:
         return "(終了済み)"
     if stripped.startswith("(") and stripped.endswith(")"):
         return stripped[1:-1] or "?"
-    return app_label(stripped) if stripped else "?"
+    return _script_name(stripped.split()) if stripped else "?"
+
+
+def _script_name(argv: list[str]) -> str:
+    """シェルと env を素通りして、中で動かしているものの名前を出す。
+
+    pyenv の shim は `bash …/pyenv-exec`・`/usr/bin/env bash …/pyenv` の形で動く。器の名前で
+    出すと「bash×197, env×42」になり、原因(pyenv)が表から隠れる。
+
+    Args:
+        argv: 空白で割ったコマンド(空でない)。
+
+    Returns:
+        表示名。
+    """
+    base = argv[0].rsplit("/", 1)[-1].lstrip("-")
+    if base == ENV_COMMAND:
+        inner = _env_command(argv[1:])
+        return _script_name(inner) if inner else base
+    if base in SCRIPT_SHELLS:
+        return _shell_script(base, argv[1:])
+    return app_label(" ".join(argv))
+
+
+def _env_command(args: list[str]) -> list[str]:
+    """env の後ろから、実際に動かすコマンドを取り出す(無ければ空)。
+
+    フラグ・`VAR=値`・値を取るフラグ(`-u VAR` 等)の値を飛ばす。`-S` の後ろは
+    1 つの文字列を割ったコマンドなので、そこから読み直す。
+    """
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == ENV_SPLIT_FLAG:
+            return [a.strip("'\"") for a in args[i + 1 :]]
+        if arg in ENV_VALUE_FLAGS:
+            i += 2
+            continue
+        if arg.startswith("-") or ("=" in arg and not arg.startswith(("/", "."))):
+            i += 1
+            continue
+        return args[i:]
+    return []
+
+
+def _shell_script(base: str, args: list[str]) -> str:
+    """シェルが動かしているスクリプトの名前。コードを直に渡す形(`-c`・`-lc`)は `<シェル> -c`。"""
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in SHELL_VALUE_FLAGS:
+            i += 2
+            continue
+        if arg.startswith("-") and not arg.startswith("--") and "c" in arg[1:]:
+            return f"{base} -c"
+        if arg.startswith(("-", "+")):
+            i += 1
+            continue
+        return arg.rsplit("/", 1)[-1]
+    return base
