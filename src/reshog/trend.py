@@ -67,7 +67,7 @@ def read_records(path: Path) -> tuple[list[dict[str, object]], int]:
     """記録を読む。読めない行は捨てずに数える(読めなかったと何も無いを分ける)。
 
     読めない行: JSON でない・UTF-8 でない・`at` がタイムゾーン付きの時刻でない・
-    by_source / by_child が「名前 → 有限の数」の辞書でない。
+    by_source / by_child が「名前 → 0 以上の有限の数」の辞書でない。
 
     Returns:
         (読めた記録, 読めなかった行の数)。空行は数えない。ファイルが無ければ ([], 0)。
@@ -81,7 +81,9 @@ def read_records(path: Path) -> tuple[list[dict[str, object]], int]:
             continue
         try:
             records.append(_parse_record(raw.decode("utf-8")))
-        except (ValueError, KeyError, TypeError):  # UnicodeDecodeError は ValueError の子
+        # UnicodeDecodeError は ValueError の子。巨大な整数(OverflowError)・深い入れ子
+        # (RecursionError)も 1 行の不良として数え、ほかの行まで読めなくしない
+        except (ValueError, KeyError, TypeError, OverflowError, RecursionError):
             broken += 1
     return records, broken
 
@@ -101,9 +103,12 @@ def _parse_record(line: str) -> dict[str, object]:
 
 
 def _is_rate(value: object) -> bool:
-    """毎秒の本数として使える値か(bool・nan・inf・文字列を弾く)。"""
+    """毎秒の本数として使える値か(bool・nan・inf・負・文字列を弾く)。"""
     return (
-        isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
+        isinstance(value, int | float)
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value >= 0
     )
 
 

@@ -170,9 +170,14 @@ class TestReadRecords:
             '{"at": "2026-10-18T12:00:00+00:00", "by_source": {"a": null}, "by_child": {}}',
             '{"at": "2026-10-18T12:00:00+00:00", "by_source": {"a": NaN}, "by_child": {}}',
             '{"at": "2026-10-18T12:00:00+00:00", "by_source": {}, "by_child": {"b": true}}',
+            '{"at": "2026-10-18T12:00:00+00:00", "by_source": {"a": -3}, "by_child": {}}',
+            '{"at": "2026-10-18T12:00:00+00:00", "by_source": {"a": 1'
+            + "0" * 400
+            + '}, "by_child": {}}',
+            "[" * 100_000,
             "[1, 2]",
         ],
-        ids=["no-tz", "str", "null", "nan", "bool", "not-dict"],
+        ids=["no-tz", "str", "null", "nan", "bool", "negative", "huge-int", "deep", "not-dict"],
     )
     def test_records_that_would_break_the_comparison_are_counted_as_broken(
         self, tmp_path: Path, line: str
@@ -287,6 +292,7 @@ class TestCli:
             ["--record", "--kill"],
             ["--record", "--grep", "claude"],
             ["--trend", "-n", "5"],
+            ["--record", "-n", "15"],  # 既定値と同じ数でも、明示したら拒否する
             ["--record", "--force"],
             ["--trend", "-y"],
         ],
@@ -302,15 +308,15 @@ class TestCli:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """置き場に書けなければ、素の例外ではなく案内を出して code 1 で終える。"""
-        blocker = tmp_path / "file"
-        blocker.write_text("", encoding="utf-8")
-        code, out = self._run(monkeypatch, tmp_path, "--record")
-        assert code == 0, out
-        monkeypatch.setenv("RESHOG_CHURN_LOG", str(blocker / "churn.jsonl"))
         from typer.testing import CliRunner
 
-        from reshog import cli
+        from reshog import cli, collect, report
 
+        blocker = tmp_path / "file"  # ファイルなので、その下に置き場を作れない
+        blocker.write_text("", encoding="utf-8")
+        monkeypatch.setenv("RESHOG_CHURN_LOG", str(blocker / "churn.jsonl"))
+        monkeypatch.setattr(report, "build_churn", lambda *a: _churn(2.0, _claude("bash")))
+        monkeypatch.setattr(collect, "load_average", lambda: (1.0, 1.0, 1.0))
         result = CliRunner().invoke(cli.cpu_app, ["--record"])
         assert result.exit_code == 1
         assert "記録へ書けませんでした" in result.output
