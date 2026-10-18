@@ -123,6 +123,36 @@ class TestRising:
         assert [r.baseline for r in result.rises] == [2.0]
 
 
+    def test_window_edges_are_inclusive(self) -> None:
+        """ちょうど 1 日前は直近、ちょうど 8 日前は過去、それより古いものは比べない。"""
+        records = [
+            _record(_NOW - timedelta(days=8, seconds=1), {"a": 100.0}),
+            _record(_NOW - timedelta(days=8), {"a": 2.0}),
+            _record(_NOW - timedelta(days=1), {"a": 10.0}),
+        ]
+        result = trend.rising(records, _NOW)
+        assert (result.recent, result.baseline) == (1, 1)
+        assert [(r.recent, r.baseline) for r in result.rises] == [(10.0, 2.0)]
+
+    def test_records_from_the_future_are_counted_not_compared(self) -> None:
+        """時計のずれで今より先の時刻が付いた記録は、直近に混ぜず future に数える。"""
+        records = [
+            _record(_NOW - timedelta(days=2), {"a": 2.0}),
+            _record(_NOW + timedelta(hours=1), {"a": 100.0}),
+            _record(_NOW - timedelta(hours=1), {"a": 2.0}),
+        ]
+        result = trend.rising(records, _NOW)
+        assert (result.recent, result.baseline, result.future) == (1, 1, 1)
+        assert result.rises == ()
+
+    def test_names_only_in_the_past_are_not_reported(self) -> None:
+        """減った・消えたものは「増えた」に出さない。"""
+        records = [
+            _record(_NOW - timedelta(days=2), {"a": 1.0, "gone": 50.0}),
+            _record(_NOW - timedelta(hours=1), {"a": 1.0}),
+        ]
+        assert trend.rising(records, _NOW).rises == ()
+
 class TestReadRecords:
     def test_broken_lines_are_counted_not_dropped(self, tmp_path: Path) -> None:
         """読めない行は黙って捨てず、件数を返す(読めなかったと何も無いを分ける)。"""
@@ -131,6 +161,38 @@ class TestReadRecords:
         path.write_text(f'{good}\nnot json\n{{"at": "x"}}\n\n', encoding="utf-8")
         records, broken = trend.read_records(path)
         assert (len(records), broken) == (1, 2)
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            '{"at": "2026-10-18T12:00:00", "by_source": {}, "by_child": {}}',
+            '{"at": "2026-10-18T12:00:00+00:00", "by_source": {"a": "5"}, "by_child": {}}',
+            '{"at": "2026-10-18T12:00:00+00:00", "by_source": {"a": null}, "by_child": {}}',
+            '{"at": "2026-10-18T12:00:00+00:00", "by_source": {"a": NaN}, "by_child": {}}',
+            '{"at": "2026-10-18T12:00:00+00:00", "by_source": {}, "by_child": {"b": true}}',
+            "[1, 2]",
+        ],
+        ids=["no-tz", "str", "null", "nan", "bool", "not-dict"],
+    )
+    def test_records_that_would_break_the_comparison_are_counted_as_broken(
+        self, tmp_path: Path, line: str
+    ) -> None:
+        """--trend の引き算・足し算で落ちる・黙って消える行は、読む時点で弾いて数える。"""
+        path = tmp_path / "churn.jsonl"
+        good = trend.to_line(_record(_NOW, {"a": 1.0}))
+        path.write_text(f"{line}\n{good}\n", encoding="utf-8")
+        records, broken = trend.read_records(path)
+        assert (len(records), broken) == (1, 1)
+        trend.rising(records, _NOW)  # 残った記録で比べても落ちない
+
+    def test_a_line_that_is_not_utf8_is_counted_and_the_rest_are_read(
+        self, tmp_path: Path
+    ) -> None:
+        path = tmp_path / "churn.jsonl"
+        good = trend.to_line(_record(_NOW, {"a": 1.0})).encode("utf-8")
+        path.write_bytes(b"\xff\xfe\n" + good + b"\n")
+        records, broken = trend.read_records(path)
+        assert (len(records), broken) == (1, 1)
 
     def test_missing_file_is_empty(self, tmp_path: Path) -> None:
         assert trend.read_records(tmp_path / "none.jsonl") == ([], 0)
@@ -223,6 +285,10 @@ class TestCli:
             ["--record", "--watch", "2"],
             ["--trend", "--json"],
             ["--record", "--kill"],
+            ["--record", "--grep", "claude"],
+            ["--trend", "-n", "5"],
+            ["--record", "--force"],
+            ["--trend", "-y"],
         ],
     )
     def test_record_and_trend_do_not_mix_with_other_views(
@@ -231,3 +297,31 @@ class TestCli:
         code, out = self._run(monkeypatch, tmp_path, *args)
         assert code == 1
         assert "併用できません" in out
+
+    def test_record_says_where_it_could_not_write(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """置き場に書けなければ、素の例外ではなく案内を出して code 1 で終える。"""
+        blocker = tmp_path / "file"
+        blocker.write_text("", encoding="utf-8")
+        code, out = self._run(monkeypatch, tmp_path, "--record")
+        assert code == 0, out
+        monkeypatch.setenv("RESHOG_CHURN_LOG", str(blocker / "churn.jsonl"))
+        from typer.testing import CliRunner
+
+        from reshog import cli
+
+        result = CliRunner().invoke(cli.cpu_app, ["--record"])
+        assert result.exit_code == 1
+        assert "記録へ書けませんでした" in result.output
+        assert "RESHOG_CHURN_LOG" in result.output
+
+    def test_record_after_a_cut_off_line_starts_on_a_new_line(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """前の回が途中で切れていても、この回の記録はつながらず読める。"""
+        (tmp_path / "churn.jsonl").write_text('{"at": "2026-10-', encoding="utf-8")
+        code, out = self._run(monkeypatch, tmp_path, "--record")
+        assert code == 0, out
+        records, broken = trend.read_records(tmp_path / "churn.jsonl")
+        assert (len(records), broken) == (1, 1)

@@ -323,6 +323,11 @@ def render_trend(console: Console, found: Trend, broken: int, path: Path) -> Non
     )
     if broken:
         console.print(f"  [yellow]読めなかった行が {broken} 行あります(数えていません)。[/yellow]")
+    if found.future:
+        console.print(
+            f"  [yellow]時刻が今より先の記録が {found.future} 回あります(比べていません。"
+            "時計のずれを疑ってください)。[/yellow]"
+        )
     if not found.comparable:
         console.print(
             "  [yellow]比べられません: 直近と過去の両方に記録が要ります"

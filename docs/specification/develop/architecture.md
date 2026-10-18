@@ -17,7 +17,7 @@
 | `llama.py` | llama-server の休止状態（`endpoint` でコマンドから問い合わせ先、`last_transition` でログの最後の休止の出入り。ログは起動し直すと時刻が 0 に戻るので、戻った後の行だけを見る）。付与は `report._with_llm_states` | なし |
 | `group.py` | アプリ名の決め方（`app_label` / `group_label`。インタプリタは動かしているスクリプト名を採り、`-c` / `-e` / `--eval` でコードを直接渡すものは `python3 -c` のように出す）と、それをキーにしたアプリ別の集約（`group_processes`） | なし |
 | `churn.py` | 短命プロセスを、数え始めから動いていた祖先（起動元）へ寄せる（`attribute`）。間の親も短命なら、さらに上まで辿る。自分が叩いた ps は数えない。親がどのサンプルにも写らないものは `CHURN_UNKNOWN_PARENT` に入れて本数から落とさない。表示名は `child_name`（`(bash)` の括弧を外し、ゾンビの `<defunct>` は「(終了済み)」、シェル（`SCRIPT_SHELLS`）と `env` は素通りして中で動かしているスクリプト名、他は `app_label`。pyenv の shim は器の名前だと bash・env としか出ず原因が隠れる）。起動元の表記は `source_label`（表と `--record` の出どころの名前で共有） | なし |
-| `trend.py` | 短命プロセスの記録と増加（`--record` / `--trend`）の純粋関数群。`record_of` で毎秒の本数の 1 行に直し、`read_records` で読み（読めない行は数える）、`rising` で直近と過去の平均を出どころ・中身の名前ごとに比べる（下限と倍率で絞る。どちらかが 0 件なら比べられないと返す）。置き場は `log_path` | なし |
+| `trend.py` | 短命プロセスの記録と増加（`--record` / `--trend`）の純粋関数群。`record_of` で毎秒の本数の 1 行に直し、`read_records` で読み（読めない行は数える。タイムゾーンの無い時刻・数でない本数も読めない行）、`rising` で直近と過去の平均を出どころ・中身の名前ごとに比べる（下限と倍率で絞る。どちらかが 0 件なら比べられないと返す。今より先の時刻は `future` に数えて比べない）。置き場は `log_path` | なし |
 | `aggregate.py` | プロセスを名前で束ねて合計し順位を付ける（`bucket_processes`）。アプリ別・PJ 別で共有 | なし |
 | `report.py` | `collect` × `parse` を組み合わせて一覧・システム状況を構築（短命プロセスの集計 `build_churn` も。ps を繰り返し撮り、`churn.attribute` で起動元へ寄せ、起動元にだけ PJ を付ける）。記録の追記 `record_churn` と読み出し `read_trend` | あり（collect 経由） |
 | `render.py` | `Process` / `SystemMemory` を表 / JSON に整形（`format_mb` 等の整形関数もここ） | なし（出力のみ） |

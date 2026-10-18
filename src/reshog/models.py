@@ -270,6 +270,7 @@ class Trend:
     recent: int
     baseline: int
     rises: tuple[Rise, ...]
+    future: int = 0  # 時刻が今より先で比べなかった記録の数
 
     @property
     def comparable(self) -> bool:

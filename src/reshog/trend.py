@@ -6,9 +6,10 @@
 """
 
 import json
+import math
 from collections import Counter
 from collections.abc import Iterable, Mapping
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import churn, origin
@@ -65,6 +66,9 @@ def to_line(record: Mapping[str, object]) -> str:
 def read_records(path: Path) -> tuple[list[dict[str, object]], int]:
     """記録を読む。読めない行は捨てずに数える(読めなかったと何も無いを分ける)。
 
+    読めない行: JSON でない・UTF-8 でない・`at` がタイムゾーン付きの時刻でない・
+    by_source / by_child が「名前 → 有限の数」の辞書でない。
+
     Returns:
         (読めた記録, 読めなかった行の数)。空行は数えない。ファイルが無ければ ([], 0)。
     """
@@ -72,39 +76,57 @@ def read_records(path: Path) -> tuple[list[dict[str, object]], int]:
         return [], 0
     records: list[dict[str, object]] = []
     broken = 0
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
+    for raw in path.read_bytes().splitlines():
+        if not raw.strip():
             continue
         try:
-            rec = json.loads(line)
-            datetime.fromisoformat(str(rec["at"]))
-            if not isinstance(rec.get("by_source"), dict) or not isinstance(
-                rec.get("by_child"), dict
-            ):
-                raise ValueError("by_source / by_child が無い")
-        except (ValueError, KeyError, TypeError):
+            records.append(_parse_record(raw.decode("utf-8")))
+        except (ValueError, KeyError, TypeError):  # UnicodeDecodeError は ValueError の子
             broken += 1
-            continue
-        records.append(rec)
     return records, broken
+
+
+def _parse_record(line: str) -> dict[str, object]:
+    """1 行を記録として検める。合わなければ ValueError / KeyError / TypeError。"""
+    rec = json.loads(line)
+    if not isinstance(rec, dict):
+        raise TypeError("記録が辞書でない")
+    if datetime.fromisoformat(str(rec["at"])).tzinfo is None:
+        raise ValueError("at にタイムゾーンが無い(比べる時刻と引き算できない)")
+    for _, field in TREND_KINDS:
+        counts = rec.get(field)
+        if not isinstance(counts, dict) or not all(_is_rate(v) for v in counts.values()):
+            raise ValueError(f"{field} が名前 → 有限の数の辞書でない")
+    return rec
+
+
+def _is_rate(value: object) -> bool:
+    """毎秒の本数として使える値か(bool・nan・inf・文字列を弾く)。"""
+    return (
+        isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
+    )
 
 
 def rising(records: Iterable[Mapping[str, object]], now: datetime) -> Trend:
     """直近(TREND_RECENT)の平均が、過去(その前の TREND_BASELINE)の平均より増えたものを返す。
 
     下限(毎秒 TREND_MIN_PER_SECOND 本)以上で、過去の TREND_RATIO 倍を超えたものだけ。
+    時刻が now より先の記録は比べず、future に数える。
     過去に無い名前は 0 から増えたとみなす。並びは増えた量の多い順。
     """
     recent: list[Mapping[str, object]] = []
     baseline: list[Mapping[str, object]] = []
+    future = 0
     for rec in records:
         age = now - datetime.fromisoformat(str(rec["at"]))
-        if age <= TREND_RECENT:
+        if age < timedelta(0):
+            future += 1  # 時計のずれ等。直近に混ぜると直近の平均が実際と違う回で決まる
+        elif age <= TREND_RECENT:
             recent.append(rec)
         elif age <= TREND_RECENT + TREND_BASELINE:
             baseline.append(rec)
     if not recent or not baseline:
-        return Trend(recent=len(recent), baseline=len(baseline), rises=())
+        return Trend(recent=len(recent), baseline=len(baseline), rises=(), future=future)
     rises = [
         Rise(kind=kind, name=name, recent=round(r, 2), baseline=round(b, 2))
         for kind, field in TREND_KINDS
@@ -112,7 +134,9 @@ def rising(records: Iterable[Mapping[str, object]], now: datetime) -> Trend:
         if r >= TREND_MIN_PER_SECOND and r > TREND_RATIO * b
     ]
     rises.sort(key=lambda x: x.recent - x.baseline, reverse=True)
-    return Trend(recent=len(recent), baseline=len(baseline), rises=tuple(rises))
+    return Trend(
+        recent=len(recent), baseline=len(baseline), rises=tuple(rises), future=future
+    )
 
 
 def _compare(

@@ -111,6 +111,7 @@ def _build_app(program: str, default_sort: str, help_text: str) -> typer.Typer:
 
     @cli.command(help=help_text)
     def main(
+        ctx: typer.Context,
         count: int = typer.Option(15, "-n", "--count", help="表示する件数。"),
         sort: str = typer.Option(
             default_sort,
@@ -175,7 +176,20 @@ def _build_app(program: str, default_sort: str, help_text: str) -> typer.Typer:
         """
         console = Console()
 
-        others = (group_by_app, by_project, app is not None, kill, watch is not None, json_out)
+        source = ctx.get_parameter_source("count")
+        count_given = source is not None and source.name == "COMMANDLINE"
+        others = (
+            group_by_app,
+            by_project,
+            app is not None,
+            kill,
+            watch is not None,
+            json_out,
+            grep is not None,
+            count_given,
+            force,
+            assume_yes,
+        )
         error = _log_option_error(record, show_trend, others)
         error = error or _option_error(sort, group_by_app, by_project, app, kill, watch, json_out)
         if error:
@@ -208,7 +222,8 @@ def _log_option_error(
         record: --record。
         show_trend: --trend。
         others: ほかの表示・操作のオプションが指定されたか(--group / --project / --app /
-            --kill / --watch / --json)。
+            --kill / --watch / --json / --grep / -n / --force / -y)。黙って無視すると、
+            絞ったつもりの記録・表示になる。
 
     Returns:
         エラーメッセージ。問題が無ければ None。
@@ -217,8 +232,8 @@ def _log_option_error(
         return "--record と --trend は併用できません(記録するか、記録を読むかのどちらか)。"
     if (record or show_trend) and any(others):
         return (
-            "--record / --trend は --group / --project / --app / --kill / --watch / --json と"
-            "併用できません。"
+            "--record / --trend は --group / --project / --app / --kill / --watch / --json /"
+            " --grep / -n / --force / -y と併用できません。"
         )
     return None
 
@@ -226,7 +241,14 @@ def _log_option_error(
 def _run_log(console: Console, record: bool) -> None:
     """--record(数えて 1 行足す)か --trend(記録を読んで比べる)を実行する。"""
     if record:
-        written = report.record_churn()
+        try:
+            written = report.record_churn()
+        except OSError as e:
+            console.print(
+                f"[red]記録へ書けませんでした: {escape(str(e))}"
+                "(置き場は RESHOG_CHURN_LOG で変えられます)。[/red]"
+            )
+            raise typer.Exit(code=1) from e
         if written is None:
             console.print(
                 "[yellow]数えられませんでした(ps が読めなかった)。記録していません。[/yellow]"

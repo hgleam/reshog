@@ -366,6 +366,9 @@ def record_churn(seconds: float = CHURN_SECONDS) -> tuple[dict[str, object], Pat
 
     Returns:
         (書いた記録, 置き場)。ps が読めず数えられなければ None。
+
+    Raises:
+        OSError: 置き場を作れない・書けない(呼び出し側が案内して code 1 で終える)。
     """
     found = build_churn(seconds)
     if found is None:
@@ -373,9 +376,20 @@ def record_churn(seconds: float = CHURN_SECONDS) -> tuple[dict[str, object], Pat
     record = trend.record_of(found, datetime.now(UTC), collect.load_average())
     path = trend.log_path(os.environ)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as out:
-        out.write(trend.to_line(record) + "\n")
+    with path.open("ab") as out:
+        # 前の回が途中で切れて改行で終わっていなければ、改行を足してから書く
+        # (つながると、切れた行と一緒にこの回の記録まで読めなくなる)
+        if out.tell() > 0 and not _ends_with_newline(path):
+            out.write(b"\n")
+        out.write((trend.to_line(record) + "\n").encode("utf-8"))
     return record, path
+
+
+def _ends_with_newline(path: Path) -> bool:
+    """ファイルの最後の 1 バイトが改行か。"""
+    with path.open("rb") as f:
+        f.seek(-1, os.SEEK_END)
+        return f.read(1) == b"\n"
 
 
 def read_trend() -> tuple[trend.Trend, int, Path]:
