@@ -7,20 +7,21 @@
 
 | モジュール | 役割 | 副作用 |
 |-----------|------|--------|
-| `collect.py` | `top` / `ps` / `sysctl` / `memory_pressure` / `lsof` / `launchctl` で状況を読む薄い I/O 層。読むだけで何も変えない | あり（subprocess） |
+| `collect.py` | `top` / `ps` / `sysctl` / `memory_pressure` / `lsof` / `launchctl` と負荷平均（`load_average`）で状況を読む薄い I/O 層。読むだけで何も変えない | あり（subprocess） |
 | `control.py` | プロセスの停止（`send_signal` = `os.kill`）と自 PID 取得（`current_pid`）。取り消せない副作用をここに閉じる | あり（os.kill） |
 | `parse.py` | top・memory_pressure の出力を解析する純粋関数群 | なし |
-| `models.py` | 型の置き場。ドメインモデル（`Process` / `PsEntry` / `ProcessGroup` / `SystemMemory` / `Origin` / `Churn` / `ChurnSource`）・表示の種類（`View`）と判定ロジック | なし |
+| `models.py` | 型の置き場。ドメインモデル（`Process` / `PsEntry` / `ProcessGroup` / `SystemMemory` / `Origin` / `Churn` / `ChurnSource` / `Rise` / `Trend`）・表示の種類（`View`）と判定ロジック | なし |
 | `constants.py` | 定数の唯一の置き場（しきい値・コマンド名・`--help` の説明文）。実装のファイル・型の置き場には定数を置かない | なし |
 | `origin.py` | 作業ディレクトリ・launchd ジョブ名から由来（`Origin`）を決める（`repo_root` / `resolve`）と、止めるときに bootout へ渡すサービス名（`launchd_service`。`<ドメイン>/<ラベル>`。GUI アプリの自動ラベルと `com.apple.*` は除く。`Process.launchd_service` に入り、止め方の案内に使う）。worktree は `.git` ファイルの gitdir をたどって本体のリポへ寄せる | あり（ファイルシステムの読み取りのみ） |
 | `known.py` | 上位に出る macOS のプロセスの説明（`describe`）。対応表は `constants.KNOWN_PROCESSES`、実行ファイル名で完全一致させる（部分一致だと `python WindowServer.py` を OS のプロセスと取り違える） | なし |
 | `llama.py` | llama-server の休止状態（`endpoint` でコマンドから問い合わせ先、`last_transition` でログの最後の休止の出入り。ログは起動し直すと時刻が 0 に戻るので、戻った後の行だけを見る）。付与は `report._with_llm_states` | なし |
 | `group.py` | アプリ名の決め方（`app_label` / `group_label`。インタプリタは動かしているスクリプト名を採り、`-c` / `-e` / `--eval` でコードを直接渡すものは `python3 -c` のように出す）と、それをキーにしたアプリ別の集約（`group_processes`） | なし |
-| `churn.py` | 短命プロセスを、数え始めから動いていた祖先（起動元）へ寄せる（`attribute`）。間の親も短命なら、さらに上まで辿る。自分が叩いた ps は数えない。親がどのサンプルにも写らないものは `CHURN_UNKNOWN_PARENT` に入れて本数から落とさない。表示名は `child_name`（`(bash)` の括弧を外し、ゾンビの `<defunct>` は「(終了済み)」、シェル（`SCRIPT_SHELLS`）と `env` は素通りして中で動かしているスクリプト名、他は `app_label`。pyenv の shim は器の名前だと bash・env としか出ず原因が隠れる） | なし |
+| `churn.py` | 短命プロセスを、数え始めから動いていた祖先（起動元）へ寄せる（`attribute`）。間の親も短命なら、さらに上まで辿る。自分が叩いた ps は数えない。親がどのサンプルにも写らないものは `CHURN_UNKNOWN_PARENT` に入れて本数から落とさない。表示名は `child_name`（`(bash)` の括弧を外し、ゾンビの `<defunct>` は「(終了済み)」、シェル（`SCRIPT_SHELLS`）と `env` は素通りして中で動かしているスクリプト名、他は `app_label`。pyenv の shim は器の名前だと bash・env としか出ず原因が隠れる）。起動元の表記は `source_label`（表と `--record` の出どころの名前で共有） | なし |
+| `trend.py` | 短命プロセスの記録と増加（`--record` / `--trend`）の純粋関数群。`record_of` で毎秒の本数の 1 行に直し、`read_records` で読み（読めない行は数える。タイムゾーンの無い時刻・数でない本数も読めない行）、`rising` で直近と過去の平均を出どころ・中身の名前ごとに比べる（下限と倍率で絞る。どちらかが 0 件なら比べられないと返す。今より先の時刻は `future` に数えて比べない）。置き場は `log_path` | なし |
 | `aggregate.py` | プロセスを名前で束ねて合計し順位を付ける（`bucket_processes`）。アプリ別・PJ 別で共有 | なし |
-| `report.py` | `collect` × `parse` を組み合わせて一覧・システム状況を構築（短命プロセスの集計 `build_churn` も。ps を繰り返し撮り、`churn.attribute` で起動元へ寄せ、起動元にだけ PJ を付ける） | あり（collect 経由） |
+| `report.py` | `collect` × `parse` を組み合わせて一覧・システム状況を構築（短命プロセスの集計 `build_churn` も。ps を繰り返し撮り、`churn.attribute` で起動元へ寄せ、起動元にだけ PJ を付ける）。記録の追記 `record_churn` と読み出し `read_trend` | あり（collect 経由） |
 | `render.py` | `Process` / `SystemMemory` を表 / JSON に整形（`format_mb` 等の整形関数もここ） | なし（出力のみ） |
-| `cli.py` | typer エントリ・オプション制御（`_option_error`）・表示の振り分け（`_render_view` が通常表示と `--watch` の唯一の入口）・`--kill` の対話（停止は control に委譲） | あり（UI 入出力のみ） |
+| `cli.py` | typer エントリ・オプション制御（`_log_option_error` / `_option_error`）・`--record` / `--trend` の実行（`_run_log`）・表示の振り分け（`_render_view` が通常表示と `--watch` の唯一の入口）・`--kill` の対話（停止は control に委譲） | あり（UI 入出力のみ） |
 
 ## データフロー
 

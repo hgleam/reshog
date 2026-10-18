@@ -214,3 +214,16 @@ def memory_pressure() -> str:
         標準出力全体。取得できなければ空文字。
     """
     return _run(["memory_pressure"])
+
+
+def load_average() -> tuple[float, float, float]:
+    """負荷平均(1・5・15 分)を返す(--record が記録に添える)。
+
+    Returns:
+        負荷平均。取れなければ (0.0, 0.0, 0.0)。
+    """
+    try:
+        one, five, fifteen = os.getloadavg()
+    except OSError:
+        return (0.0, 0.0, 0.0)
+    return (round(one, 2), round(five, 2), round(fifteen, 2))

@@ -5,6 +5,7 @@
 """
 
 import re
+from datetime import timedelta
 
 # --- 判定のしきい値・コマンド名(models.py) ---
 
@@ -153,6 +154,28 @@ LAUNCHD_PID = 1
 
 # 親を辿る深さの上限(PID の再利用で親子が輪になっても止まるように)。
 CHURN_MAX_DEPTH = 64
+
+
+# --- 短命プロセスの記録と増加(trend.py。--record / --trend) ---
+
+# 記録の置き場(1 回 1 行の JSON を追記する)。環境変数で差し替えられる。
+CHURN_LOG_ENV = "RESHOG_CHURN_LOG"
+CHURN_LOG_DEFAULT = (".local", "state", "reshog", "churn.jsonl")
+
+# 「直近」と比べる「過去」の幅。直近 1 日の平均を、その前の 7 日の平均と比べる。
+TREND_RECENT = timedelta(days=1)
+TREND_BASELINE = timedelta(days=7)
+
+# 知らせる増え方。毎秒の本数が 1 本以上で、過去の平均の 1.5 倍を超えたもの。
+# 下限が無いと、0.1 → 0.3 本/秒のような誤差の揺れまで出て、読まれなくなる。
+TREND_MIN_PER_SECOND = 1.0
+TREND_RATIO = 1.5
+
+# --trend の表に出す行数(出どころと中身の名前のそれぞれ)。
+TREND_TOP = 10
+
+# 比べる 2 つの軸(種類の名前, 記録の欄)。出どころ別と中身の名前別。
+TREND_KINDS = (("source", "by_source"), ("child", "by_child"))
 
 
 # --- 表示(render.py) ---

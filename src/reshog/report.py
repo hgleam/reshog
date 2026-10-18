@@ -1,12 +1,14 @@
 """collect と parse を組み合わせ、プロセス一覧とシステム状況を構築する。"""
 
+import os
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from itertools import islice
+from pathlib import Path
 
-from . import aggregate, churn, collect, control, group, llama, origin, parse
+from . import aggregate, churn, collect, control, group, llama, origin, parse, trend
 from .constants import CHURN_POLL_SECONDS, CHURN_SECONDS, GROUP_SAMPLE_MARGIN, GROUP_SAMPLE_MIN
 from .models import (
     Churn,
@@ -354,6 +356,51 @@ def _with_origins(processes: list[Process]) -> list[Process]:
 def _now() -> datetime:
     """開始時刻の基準にする現在時刻(テストで差し替える)。"""
     return datetime.now().replace(microsecond=0)
+
+
+def record_churn(seconds: float = CHURN_SECONDS) -> tuple[dict[str, object], Path] | None:
+    """短命プロセスを数え、記録(trend.log_path)へ 1 行追記する(--record)。
+
+    数えられなかった回は書かない。「0 本」として残すと過去の平均が下がり、
+    次の回が増えたように見える。
+
+    Returns:
+        (書いた記録, 置き場)。ps が読めず数えられなければ None。
+
+    Raises:
+        OSError: 置き場を作れない・書けない(呼び出し側が案内して code 1 で終える)。
+    """
+    found = build_churn(seconds)
+    if found is None:
+        return None
+    record = trend.record_of(found, datetime.now(UTC), collect.load_average())
+    path = trend.log_path(os.environ)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("ab") as out:
+        # 前の回が途中で切れて改行で終わっていなければ、改行を足してから書く
+        # (つながると、切れた行と一緒にこの回の記録まで読めなくなる)
+        if out.tell() > 0 and not _ends_with_newline(path):
+            out.write(b"\n")
+        out.write((trend.to_line(record) + "\n").encode("utf-8"))
+    return record, path
+
+
+def _ends_with_newline(path: Path) -> bool:
+    """ファイルの最後の 1 バイトが改行か。"""
+    with path.open("rb") as f:
+        f.seek(-1, os.SEEK_END)
+        return f.read(1) == b"\n"
+
+
+def read_trend() -> tuple[trend.Trend, int, Path]:
+    """記録を読み、直近と過去を比べる(--trend)。
+
+    Returns:
+        (比べた結果, 読めなかった行の数, 置き場)。
+    """
+    path = trend.log_path(os.environ)
+    records, broken = trend.read_records(path)
+    return trend.rising(records, datetime.now(UTC)), broken, path
 
 
 def _clock() -> float:
