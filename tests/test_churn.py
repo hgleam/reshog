@@ -50,7 +50,7 @@ class TestAttribute:
         # 300 は次のサンプルでは消えているが、孫の 301 は 300 を親に持つ。
         second = _snapshot(*_BASE.values(), _entry(301, 300, "python3 /h/hooks/guard.py"))
         found = churn.attribute(_BASE, [first, second], self_pid=999)
-        assert found == {100: ["bash", "guard.py"]}
+        assert found == {100: ["bash -c", "guard.py"]}
 
     def test_a_process_seen_in_several_samples_is_counted_once(self) -> None:
         sample = _snapshot(*_BASE.values(), _entry(300, 200, "python worker"))
@@ -91,6 +91,25 @@ class TestChildName:
             ("/opt/homebrew/bin/gh pr view 1", "gh"),
             ("python3 /h/hooks/guard.py --x", "guard.py"),
             ("", "?"),
+            # シェルと env は器。中で動かしているスクリプトの名前を出す
+            # (pyenv の shim が bash×197・env×42 としか見えず、原因が隠れていた)。
+            ("bash /opt/homebrew/Cellar/pyenv/2.6.26/libexec/pyenv-exec python3", "pyenv-exec"),
+            ("/usr/bin/env bash /opt/homebrew/Cellar/pyenv/2.6.26/libexec/pyenv exec", "pyenv"),
+            ("env FOO=1 -i /usr/bin/python3 /h/hooks/guard.py", "guard.py"),
+            ("/bin/zsh -l /u/bin/loop.sh", "loop.sh"),
+            ("bash -c echo hi", "bash -c"),
+            ("bash", "bash"),
+            ("-zsh", "zsh"),
+            ("env", "env"),
+            # 値を取るオプションの値を、スクリプト名と取り違えない(レビューの指摘)。
+            ("env -u VAR /usr/bin/python3 /h/x.py", "x.py"),
+            ("env -C /tmp ls -la", "ls"),
+            ("env -S python3 /h/y.py", "y.py"),
+            ("bash -o pipefail /u/run.sh", "run.sh"),
+            ("bash -O extglob /u/run.sh", "run.sh"),
+            ("bash -lc foo", "bash -c"),  # -l と -c をつなげた形
+            ("sh -e /u/run.sh", "run.sh"),  # シェルの -e は errexit で、コードではない
+            ("bash --norc /a/b.sh", "b.sh"),
         ],
     )
     def test_name(self, command: str, expected: str) -> None:
