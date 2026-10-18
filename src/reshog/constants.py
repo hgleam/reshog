@@ -129,6 +129,9 @@ CHURN_TOP_CHILDREN = 3
 # 親がどのサンプルにも写らなかったもの(親も一瞬で終わった等)の束ね先。PID 0 は実在しない。
 CHURN_UNKNOWN_PARENT = 0
 
+# launchd の PID。親が先に終わった子はここへ付け替わる(起動元の表記で断る)。
+LAUNCHD_PID = 1
+
 # 親を辿る深さの上限(PID の再利用で親子が輪になっても止まるように)。
 CHURN_MAX_DEPTH = 64
 

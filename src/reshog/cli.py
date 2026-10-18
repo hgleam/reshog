@@ -118,7 +118,10 @@ def _build_app(program: str, default_sort: str, help_text: str) -> typer.Typer:
             help="並べる基準。mem(実メモリ) または cpu(CPU使用率)。",
         ),
         grep: str | None = typer.Option(
-            None, "-g", "--grep", help="フルコマンドに部分一致するものだけ表示(大小無視)。"
+            None,
+            "-g",
+            "--grep",
+            help="フルコマンドに部分一致するものだけ表示(大小無視)。短命プロセスの集計には掛からない。",
         ),
         json_out: bool = typer.Option(False, "--json", help="機械可読な JSON で出力する。"),
         group_by_app: bool = typer.Option(
@@ -258,35 +261,36 @@ def _render_view(
     system = report.build_system_memory(top_raw)
     cpu = report.build_system_cpu(top_raw)
     # CPU 順のときだけ数える(数秒かかる)。一覧に出ない短命プロセスが負荷の原因のことがある。
-    found = report.build_churn() if sort == "cpu" else None
+    measured = sort == "cpu"
+    found = report.build_churn() if measured else None
 
     if clear:
         console.clear()
     if view == "project":
         if json_out:
-            typer.echo(render.build_project_json(projects, unknown, system, cpu, found))
+            typer.echo(render.build_project_json(projects, unknown, system, cpu, found, measured))
         else:
             render.render_project_table(console, projects, unknown, system, cpu, grep, sort)
-            _render_churn(console, found)
+            _render_churn(console, found, measured)
         return []
     if view == "group":
         if json_out:
-            typer.echo(render.build_group_json(groups, system, cpu, found))
+            typer.echo(render.build_group_json(groups, system, cpu, found, measured))
         else:
             render.render_group_table(console, groups, system, cpu, grep, sort)
-            _render_churn(console, found)
+            _render_churn(console, found, measured)
         return []
     if json_out:
-        typer.echo(render.build_json(processes, system, cpu, found))
+        typer.echo(render.build_json(processes, system, cpu, found, measured))
     else:
         render.render_table(console, processes, system, cpu, sort)
-        _render_churn(console, found)
+        _render_churn(console, found, measured)
     return processes
 
 
-def _render_churn(console: Console, found: Churn | None) -> None:
-    """数えていれば短命プロセスの表を出す(3 つの表示の末尾で共通)。"""
-    if found is not None:
+def _render_churn(console: Console, found: Churn | None, measured: bool) -> None:
+    """数えようとしたなら短命プロセスの表を出す(3 つの表示の末尾で共通)。"""
+    if measured:
         render.render_churn(console, found)
 
 

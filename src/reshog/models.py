@@ -164,7 +164,9 @@ class ChurnSource:
         return len(self.children)
 
     def main_children(self, limit: int) -> str:
-        """多い順に名前と本数を並べる(「bash×3, gh×2」)。
+        """多い順に名前と本数を並べる(「bash×3, gh×2, ほか 1」)。
+
+        並べなかった名前の本数は「ほか N」で足す(行の本数と中身の合計を合わせる)。
 
         Args:
             limit: 並べる名前の数。
@@ -172,7 +174,10 @@ class ChurnSource:
         Returns:
             表示する文字列。
         """
-        return ", ".join(f"{name}×{n}" for name, n in Counter(self.children).most_common(limit))
+        ranked = Counter(self.children).most_common()
+        shown = [f"{name}×{n}" for name, n in ranked[:limit]]
+        rest = sum(n for _, n in ranked[limit:])
+        return ", ".join(shown + ([f"ほか {rest}"] if rest else []))
 
 
 @dataclass(frozen=True)

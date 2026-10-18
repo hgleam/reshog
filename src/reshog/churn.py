@@ -26,37 +26,48 @@ def attribute(
         起動元の PID -> 生まれたプロセスの名前(現れた順)。起動元が分からないものは
         CHURN_UNKNOWN_PARENT に入れる(本数から落とさない)。
     """
+    shots = list(samples)
+    alive = shots[-1] if shots else base
     seen: dict[int, PsEntry] = {}
-    for sample in samples:
+    for sample in shots:
         for pid, entry in sample.items():
             if pid not in base and pid not in seen:
                 seen[pid] = entry
 
     found: dict[int, list[str]] = {}
     for entry in seen.values():
-        source = _source_of(entry, base, seen)
+        source = _source_of(entry, base, seen, alive)
         if source == self_pid:
             continue
         found.setdefault(source, []).append(child_name(entry.command))
     return found
 
 
-def _source_of(entry: PsEntry, base: dict[int, PsEntry], seen: dict[int, PsEntry]) -> int:
-    """親を辿り、数え始めから動いていた最初の祖先の PID を返す。
+def _source_of(
+    entry: PsEntry,
+    base: dict[int, PsEntry],
+    seen: dict[int, PsEntry],
+    alive: dict[int, PsEntry],
+) -> int:
+    """親を辿り、数え始めから終わりまで動いていた最初の祖先の PID を返す。
+
+    数え始めに写った親も短命なことがある(フックの bash がたまたま写る等)。そこで止めると
+    起動元が PID の違う bash に 1 本ずつ割れるので、最後のサンプルに居なければさらに上へ辿る。
 
     Args:
         entry: 新しく現れたプロセス。
         base: 数え始めのスナップショット。
         seen: 新しく現れたプロセス(間の親を辿るため)。
+        alive: 最後のサンプル(終わりまで動いていたかの判定)。
 
     Returns:
         起動元の PID。辿れなければ CHURN_UNKNOWN_PARENT。
     """
     parent = entry.ppid
     for _ in range(CHURN_MAX_DEPTH):
-        if parent in base:
+        if parent in base and parent in alive:
             return parent
-        between = seen.get(parent)
+        between = base.get(parent) or seen.get(parent)
         if between is None:
             return CHURN_UNKNOWN_PARENT
         parent = between.ppid

@@ -18,10 +18,20 @@ from .constants import (
     CHURN_TOP_SOURCES,
     CHURN_UNKNOWN_PARENT,
     COMMAND_BY_SORT,
+    LAUNCHD_PID,
     MAX_CMD,
 )
 from .group import app_label
-from .models import Churn, LlmState, Origin, Process, ProcessGroup, SystemCpu, SystemMemory
+from .models import (
+    Churn,
+    ChurnSource,
+    LlmState,
+    Origin,
+    Process,
+    ProcessGroup,
+    SystemCpu,
+    SystemMemory,
+)
 
 
 def _shorten(command: str) -> str:
@@ -234,13 +244,17 @@ def render_table(
     console.print()
 
 
-def render_churn(console: Console, found: Churn) -> None:
+def render_churn(console: Console, found: Churn | None) -> None:
     """短命プロセスの本数と、それを生んでいる起動元の内訳を出す(cpuhog の全表示で共通)。
 
     Args:
         console: 出力先の rich Console。
-        found: 集計結果。
+        found: 集計結果。数えられなかったら None(「0 本」と区別して出す)。
     """
+    if found is None:
+        console.print("[bold]== 短命プロセス ==[/bold]")
+        console.print("  [yellow]数えられませんでした(ps が読めなかった)。[/yellow]")
+        return
     console.print(
         f"[bold]== 短命プロセス ({found.seconds:.1f} 秒間に新しく生まれたもの) ==[/bold]"
     )
@@ -270,7 +284,7 @@ def render_churn(console: Console, found: Churn) -> None:
             str(rank),
             str(source.count),
             _origin_text(source.origin),
-            Text("(親不明)" if unknown else app_label(source.command)),
+            Text(_source_label(source)),
             "-" if unknown else str(source.pid),
             Text(source.main_children(CHURN_TOP_CHILDREN)),
         )
@@ -281,6 +295,16 @@ def render_churn(console: Console, found: Churn) -> None:
             "", str(sum(s.count for s in rest)), "", f"ほか {len(rest)} 起動元", "", "", style="dim"
         )
     console.print(table)
+
+
+def _source_label(source: ChurnSource) -> str:
+    """起動元の列の表記。"""
+    if source.pid == CHURN_UNKNOWN_PARENT:
+        return "(親不明)"
+    if source.pid == LAUNCHD_PID:
+        # 親が先に終わった子は launchd に付け替わる。launchd が生んだと誤読させない。
+        return "launchd(親が先に終わったものを含む)"
+    return app_label(source.command)
 
 
 def _churn_payload(found: Churn) -> dict[str, object]:
@@ -302,15 +326,22 @@ def _churn_payload(found: Churn) -> dict[str, object]:
     }
 
 
-def _dumps(payload: dict[str, object], found: Churn | None) -> str:
-    """JSON を文字列にする(3 つの表示で共通。数えたときだけ `churn` を足す)。"""
-    if found is not None:
-        payload["churn"] = _churn_payload(found)
+def _dumps(payload: dict[str, object], found: Churn | None, measured: bool) -> str:
+    """JSON を文字列にする(3 つの表示で共通)。
+
+    数えたときだけ `churn` を足す。数えようとして読めなかったときは null(「0 本」と区別する)。
+    """
+    if measured:
+        payload["churn"] = _churn_payload(found) if found is not None else None
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def build_json(
-    processes: list[Process], system: SystemMemory, cpu: SystemCpu, found: Churn | None = None
+    processes: list[Process],
+    system: SystemMemory,
+    cpu: SystemCpu,
+    found: Churn | None = None,
+    measured: bool = False,
 ) -> str:
     """機械可読な JSON 文字列を生成する。
 
@@ -318,7 +349,8 @@ def build_json(
         processes: プロセス一覧。
         system: システムのメモリ状況。
         cpu: システムの CPU 状況。
-        found: 短命プロセスの集計。数えていなければ None(`churn` を出さない)。
+        found: 短命プロセスの集計。数えられなかった・数えていなければ None。
+        measured: 数えようとしたか。False なら `churn` を出さない。
 
     Returns:
         整形済み JSON 文字列。
@@ -357,7 +389,7 @@ def build_json(
             for rank, p in enumerate(processes, start=1)
         ],
     }
-    return _dumps(payload, found)
+    return _dumps(payload, found, measured)
 
 
 def render_group_table(
@@ -534,6 +566,7 @@ def build_group_json(
     system: SystemMemory,
     cpu: SystemCpu,
     found: Churn | None = None,
+    measured: bool = False,
 ) -> str:
     """アプリ別の集約結果を機械可読な JSON 文字列にする。
 
@@ -541,7 +574,8 @@ def build_group_json(
         groups: グループ一覧。
         system: システムのメモリ状況。
         cpu: システムの CPU 状況。
-        found: 短命プロセスの集計。数えていなければ None(`churn` を出さない)。
+        found: 短命プロセスの集計。数えられなかった・数えていなければ None。
+        measured: 数えようとしたか。False なら `churn` を出さない。
 
     Returns:
         整形済み JSON 文字列(`system` と `groups[]`)。
@@ -550,7 +584,7 @@ def build_group_json(
         "system": _system_payload(system, cpu),
         "groups": _group_items(groups),
     }
-    return _dumps(payload, found)
+    return _dumps(payload, found, measured)
 
 
 def build_project_json(
@@ -559,6 +593,7 @@ def build_project_json(
     system: SystemMemory,
     cpu: SystemCpu,
     found: Churn | None = None,
+    measured: bool = False,
 ) -> str:
     """PJ 別の集約結果を機械可読な JSON 文字列にする。
 
@@ -567,7 +602,8 @@ def build_project_json(
         unknown: PJ が分からなかったプロセスの合計。無ければ None。
         system: システムのメモリ状況。
         cpu: システムの CPU 状況。
-        found: 短命プロセスの集計。数えていなければ None(`churn` を出さない)。
+        found: 短命プロセスの集計。数えられなかった・数えていなければ None。
+        measured: 数えようとしたか。False なら `churn` を出さない。
 
     Returns:
         整形済み JSON 文字列(`system` と `projects[]` と `unknown`)。
@@ -581,4 +617,4 @@ def build_project_json(
             else None
         ),
     }
-    return _dumps(payload, found)
+    return _dumps(payload, found, measured)

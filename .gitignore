@@ -17,3 +17,4 @@ build/
 .claude/worktrees/
 .claude/.unwired-guard-notified
 .claude/.awaiting-approval
+screenshots/

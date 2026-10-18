@@ -280,7 +280,7 @@ def _since(process: Process, sleeping: bool) -> datetime | None:
     return process.started_at + last[1]
 
 
-def build_churn(seconds: float = CHURN_SECONDS) -> Churn:
+def build_churn(seconds: float = CHURN_SECONDS) -> Churn | None:
     """数秒間 ps を撮り続け、新しく生まれたプロセスを起動元ごとに数える。
 
     top の 2 サンプルの間に生まれて終わるプロセスは CPU の一覧に出ない。負荷平均が
@@ -290,9 +290,12 @@ def build_churn(seconds: float = CHURN_SECONDS) -> Churn:
         seconds: 数える時間(秒)。
 
     Returns:
-        Churn。秒数は実際に数えた時間(ps 自体の所要を含む)。
+        Churn。秒数は実際に数えた時間(ps 自体の所要を含む)。数え始めの ps が読めなければ
+        None(空と比べると全プロセスが「新しく生まれた」に見えるので、数えない)。
     """
     base = parse.parse_ps_snapshot(collect.ps_snapshot())
+    if not base:
+        return None
     started = _clock()
     samples: list[dict[int, PsEntry]] = []
     while True:

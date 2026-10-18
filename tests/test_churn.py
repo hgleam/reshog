@@ -7,12 +7,13 @@ cpuhog の一覧には WindowServer しか出なかった(2026-10-18)。
 
 import io
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from rich.console import Console
 
 from reshog import churn, cli, collect, control, render, report
-from reshog.constants import CHURN_UNKNOWN_PARENT
+from reshog.constants import CHURN_POLL_SECONDS, CHURN_UNKNOWN_PARENT
 from reshog.models import Churn, ChurnSource, Origin, PsEntry, SystemCpu, SystemMemory
 
 
@@ -69,6 +70,17 @@ class TestAttribute:
     def test_processes_already_running_at_the_start_are_not_new(self) -> None:
         assert churn.attribute(_BASE, [_BASE], self_pid=999) == {}
 
+    def test_a_parent_that_was_running_at_the_start_but_ended_is_traced_further(self) -> None:
+        """数え始めに写った親も短命なことがある(1 秒に 100 本生まれると必ず混ざる)。
+
+        途中で終わった親で束ねると、起動元が PID の違う bash に 1 本ずつ割れて順位が崩れる。
+        最後のサンプルで生きていなければ、さらに上へ辿る。
+        """
+        base = _snapshot(*_BASE.values(), _entry(250, 100, "bash -c hook.sh"))
+        first = _snapshot(*base.values(), _entry(300, 250, "python3 /h/hooks/guard.py"))
+        last = _snapshot(*_BASE.values())  # 250 は終わっている
+        assert churn.attribute(base, [first, last], self_pid=999) == {100: ["guard.py"]}
+
 
 class TestChildName:
     @pytest.mark.parametrize(
@@ -98,19 +110,30 @@ class TestModel:
             origin=None,
             children=("bash", "gh", "bash", "git", "bash", "gh", "ps"),
         )
-        assert source.main_children(3) == "bash×3, gh×2, git×1"
+        assert source.main_children(3) == "bash×3, gh×2, git×1, ほか 1"
+
+    def test_main_children_without_remainder(self) -> None:
+        source = ChurnSource(pid=100, command="claude", origin=None, children=("bash", "gh"))
+        assert source.main_children(3) == "bash×1, gh×1"
 
 
 class TestBuildChurn:
     @pytest.fixture(autouse=True)
     def _mock(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        base = "1 0 1 /sbin/launchd\n100 1 1 /Users/u/.local/bin/claude\n999 1 1 cpuhog\n"
+        base = (
+            "1 0 1 /sbin/launchd\n100 1 1 /Users/u/.local/bin/claude\n"
+            "200 1 1 /usr/bin/make\n999 1 1 cpuhog\n"
+        )
         later = base + "300 100 1 (bash)\n301 100 1 gh pr view\n302 999 1 ps -Ao\n"
-        snapshots: Iterator[str] = iter([base, later, later + "303 100 1 (bash)\n"])
-        clock = iter([0.0, 1.5, 3.1])  # 撮り始め / 1 回目の後 / 2 回目の後(ここで 3 秒を超える)
-        monkeypatch.setattr(collect, "ps_snapshot", lambda: next(snapshots))
+        last = later + "303 100 1 (bash)\n304 200 1 cc\n"
+        self.snapshots: list[str] = [base, later, last]
+        # 実機の monotonic は 0 から始まらない。ちょうど 3 秒で止まること(>= で比べる)も固定する。
+        clock = iter([1000.0, 1001.5, 1003.0])
+        self.sleeps: list[float] = []
+        shots: Iterator[str] = iter(self.snapshots)
+        monkeypatch.setattr(collect, "ps_snapshot", lambda: next(shots))
         monkeypatch.setattr(report, "_clock", lambda: next(clock))
-        monkeypatch.setattr(report, "_sleep", lambda seconds: None)
+        monkeypatch.setattr(report, "_sleep", self.sleeps.append)
         monkeypatch.setattr(control, "current_pid", lambda: 999)
         monkeypatch.setattr(collect, "process_cwds", lambda pids: "p100\nn/Users/u/repo\n")
         monkeypatch.setattr(collect, "launchd_jobs", lambda: "")
@@ -118,14 +141,36 @@ class TestBuildChurn:
 
     def test_counts_new_processes_by_the_running_parent(self) -> None:
         found = report.build_churn(3.0)
-        assert found.total == 3
-        assert found.seconds == pytest.approx(3.1)  # 実際に数えた時間で割る
-        assert [(s.pid, s.children) for s in found.sources] == [(100, ("bash", "gh", "bash"))]
+        assert found is not None
+        assert found.total == 4
+        assert found.seconds == pytest.approx(3.0)  # 実際に数えた時間で割る
+        # 本数の多い順に並ぶ(表の上位と「ほか」の行はこの順に依存する)。
+        assert [(s.pid, s.children) for s in found.sources] == [
+            (100, ("bash", "gh", "bash")),
+            (200, ("cc",)),
+        ]
         assert found.sources[0].command == "/Users/u/.local/bin/claude"
+        assert self.sleeps == [CHURN_POLL_SECONDS, CHURN_POLL_SECONDS]
+
+    def test_project_is_attached_to_the_source(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        (tmp_path / "myrepo" / ".git").mkdir(parents=True)
+        monkeypatch.setattr(collect, "process_cwds", lambda pids: f"p100\nn{tmp_path}/myrepo\n")
+        found = report.build_churn(3.0)
+        assert found is not None
+        assert found.sources[0].origin == Origin(kind="git", name="myrepo")
+
+    def test_unreadable_first_snapshot_is_not_reported_as_everything_being_new(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """数え始めの ps が読めないと、全プロセスが「新しく生まれた」に見える。数えずに None。"""
+        self.snapshots[0] = ""
+        assert report.build_churn(3.0) is None
 
 
 class TestRender:
-    def _text(self, found: Churn) -> str:
+    def _text(self, found: Churn | None) -> str:
         buffer = io.StringIO()
         render.render_churn(Console(file=buffer, width=200, no_color=True, highlight=False), found)
         return buffer.getvalue()
@@ -161,6 +206,14 @@ class TestRender:
         source = ChurnSource(pid=100, command="bash", origin=None, children=("x",))
         assert "ほか" not in self._text(Churn(seconds=3.0, sources=(source,)))
 
+    def test_launchd_row_says_it_includes_orphans(self) -> None:
+        """親が先に終わった子は launchd(PID 1)に付け替わる。launchd が生んだと誤読させない。"""
+        source = ChurnSource(pid=1, command="/sbin/launchd", origin=None, children=("bash",))
+        assert "親が先に終わったものを含む" in self._text(Churn(seconds=3.0, sources=(source,)))
+
+    def test_unreadable(self) -> None:
+        assert "数えられませんでした" in self._text(None)
+
     def test_unknown_parent_is_labelled(self) -> None:
         source = ChurnSource(pid=CHURN_UNKNOWN_PARENT, command="", origin=None, children=("bash",))
         assert "(親不明)" in self._text(Churn(seconds=3.0, sources=(source,)))
@@ -169,9 +222,12 @@ class TestRender:
         assert "0 本" in self._text(Churn(seconds=3.0, sources=()))
 
     def test_untrusted_command_is_not_interpreted_as_markup(self) -> None:
-        source = ChurnSource(pid=1, command="[red]x[/red]", origin=None, children=("[b]y[/b]",))
+        source = ChurnSource(
+            pid=5, command="[b]evil[b]", origin=None, children=("[b]y[/b]",)
+        )
         text = self._text(Churn(seconds=3.0, sources=(source,)))
         assert "[b]y[/b]" in text
+        assert "[b]evil[b]" in text  # 起動元の列もマークアップとして読ませない
 
     def test_json_carries_the_breakdown(self) -> None:
         import json
@@ -184,13 +240,27 @@ class TestRender:
         )
         payload = json.loads(
             render.build_json(
-                [], SystemMemory(None, None, None), SystemCpu(None, None), Churn(3.0, (source,))
+                [],
+                SystemMemory(None, None, None),
+                SystemCpu(None, None),
+                Churn(3.0, (source,)),
+                measured=True,
             )
         )
         assert payload["churn"]["total"] == 2
         assert payload["churn"]["sources"][0]["pid"] == 100
         assert payload["churn"]["sources"][0]["origin"] == {"kind": "git", "name": "pj"}
         assert payload["churn"]["sources"][0]["children"] == {"bash": 2}
+
+    def test_json_says_null_when_it_could_not_count(self) -> None:
+        import json
+
+        payload = json.loads(
+            render.build_json(
+                [], SystemMemory(None, None, None), SystemCpu(None, None), None, measured=True
+            )
+        )
+        assert payload["churn"] is None
 
     def test_json_omits_churn_when_not_measured(self) -> None:
         import json
