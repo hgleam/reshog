@@ -7,7 +7,7 @@
 
 from collections.abc import Iterable
 
-from .constants import CHURN_MAX_DEPTH, CHURN_UNKNOWN_PARENT
+from .constants import CHURN_MAX_DEPTH, CHURN_UNKNOWN_PARENT, DEFUNCT
 from .group import app_label
 from .models import PsEntry
 
@@ -78,6 +78,7 @@ def child_name(command: str) -> str:
     """生まれたプロセスの表示名。
 
     名前を読む前に終わったものは ps が `(bash)` のように括弧付きで出すので外す。
+    親がまだ回収していない終わったプロセス(ゾンビ)は `<defunct>` と出るので言い換える。
     それ以外はアプリ名の導出(`--group` と同じ規則)に任せる。
 
     Args:
@@ -87,6 +88,8 @@ def child_name(command: str) -> str:
         表示名。分からなければ "?"。
     """
     stripped = command.strip()
+    if stripped == DEFUNCT:
+        return "(終了済み)"
     if stripped.startswith("(") and stripped.endswith(")"):
         return stripped[1:-1] or "?"
     return app_label(stripped) if stripped else "?"

@@ -87,6 +87,7 @@ class TestChildName:
         ("command", "expected"),
         [
             ("(bash)", "bash"),  # 名前を読む前に終わったもの
+            ("<defunct>", "(終了済み)"),  # 親がまだ回収していない終わったプロセス
             ("/opt/homebrew/bin/gh pr view 1", "gh"),
             ("python3 /h/hooks/guard.py --x", "guard.py"),
             ("", "?"),

@@ -4,7 +4,7 @@
 
 `tests/` 配下、pytest。`collect`（外部コマンド I/O）をモックするため macOS 非依存で CI（Linux）でも動く。
 
-件数は pytest 収集数（parametrize 展開後）。合計 316。文書整合のスクリプト型テスト
+件数は pytest 収集数（parametrize 展開後）。合計 319。文書整合のスクリプト型テスト
 （`python3 tests/test_doc_*.py` でも走るもの）は pytest からは 1 件に見えるので 1 と数え、
 中の検査項目は「対象」に書く。この表と合計は `test_doc_test_counts.py` が実際の収集数と照合する。
 
@@ -13,7 +13,7 @@
 | `test_models.py` | 6 | `Process.hidden_gpu` の判定（境界値・GPU 常駐/非常駐） |
 | `test_parse.py` | 23 | `parse_mem_to_mb` / `parse_top_processes` / `parse_phys_mem` / `parse_free_percentage` / `parse_ps_snapshot` |
 | `test_report.py` | 17 | `build_processes` / `build_groups` / `build_app_processes` / 走査幅 / `build_system_memory` / RSS は表示するものだけに取る（collect をモック） |
-| `test_group.py` | 17 | `app_label` / `group_label`（親子・器の素通り・循環）/ `group_processes`（合算・順位） |
+| `test_group.py` | 19 | `app_label`（`-c` / `-e` の次のコードをスクリプト名にしない）/ `group_label`（親子・器の素通り・循環）/ `group_processes`（合算・順位） |
 | `test_render.py` | 16 | `format_mb`（MB→G/M 整形）/ 他プロセス由来文字列のマークアップ escape / 提案コマンドの shlex クォート / CPU 表示 / 提案コマンドが並び順に合うこと / `COMMAND_BY_SORT` が唯一の正本であること |
 | `test_cpu.py` | 15 | CPU 表示: 2 サンプル目だけを解析する / システム CPU の見出し / top を 2 回サンプルする / アプリ別の CPU 合計 |
 | `test_cli_smoke.py` | 20 | 実エントリ（`python -m reshog.cli`）を subprocess で叩く（`--help` / `--version` / 併用制約のエラー / `--sort` / `cpuhog` / entry point の宣言）。版非互換・パース崩れの検出 |
@@ -25,7 +25,7 @@
 | `test_known_processes.py` | 26 | OS のプロセスの説明: `known.describe`（実行ファイル名の完全一致・OS の置き場所の外の同名ファイルを拾わない）/ Spotlight は止めてよいがすぐ起動し直す / XprotectService は kill せずデベロッパツールへの登録を案内し、効いたかの確認コマンドを添える / 表の行に「ⓘ 用途・止めない」/ 止めてはいけないものは停止の案内を出さない / `--kill` の警告（確認すれば送る） |
 | `test_llama_sleep.py` | 37 | llama-server の休止状態: `llama.endpoint`（既定値・`=` 形式・IPv6・引用符の崩れ・他のマシンは問い合わせない）/ `http_get` はプロキシを通さない/ `/props` と `launchctl print` の解析 / `last_transition`（起動し直しで時刻が戻る前の行を使わない）/ 時刻は開始時刻＋経過・ログと食い違えば出さない / 表・JSON / `read_tail` は末尾だけ |
 | `test_control.py` | 4 | `control.send_signal`（os.kill をモック・例外→結果コード翻訳）/ `current_pid` |
-| `test_churn.py` | 36 | 短命プロセス: 起動元への寄せ方（数え始めから終わりまで動いていた祖先まで辿る・数え始めに写った短命な親を越える・同じ PID は 1 回・自分の ps は数えない・親不明も落とさない）/ 表示名 / 本数と 1 秒あたり / `build_churn`（実際に数えた秒数で割る・本数順・PJ を付ける・数え始めの ps が読めなければ数えない）/ 表（PJ・起動元・中身の「ほか」・表に出ない分の行・launchd の断り・数えられなかった表示・escape）/ JSON（数えられなければ null）/ CPU 順の全表示でだけ数え、集め終えてから画面を消す |
+| `test_churn.py` | 37 | 短命プロセス: 起動元への寄せ方（数え始めから終わりまで動いていた祖先まで辿る・数え始めに写った短命な親を越える・同じ PID は 1 回・自分の ps は数えない・親不明も落とさない）/ 表示名 / 本数と 1 秒あたり / `build_churn`（実際に数えた秒数で割る・本数順・PJ を付ける・数え始めの ps が読めなければ数えない）/ 表（PJ・起動元・中身の「ほか」・表に出ない分の行・launchd の断り・数えられなかった表示・escape）/ JSON（数えられなければ null）/ CPU 順の全表示でだけ数え、集め終えてから画面を消す |
 | `test_cli_view.py` | 5 | `cli._render_view`: `--watch` はデータを集め終えてから画面を消す（4 種の表示すべて）/ 集約表示は停止の選択肢を返さない |
 | `test_structure.py` | 8 | 置き場所の約束: `report.build_*` を呼ぶのは `_render_view` だけ / render に `kind` 引数も表示の種類の文字列との比較も持ち込まない / 文書が名指しする定数が実在する / 実装のファイルに定数・型定義を置かない / 型の置き場に定数を置かない / 同じ値の定数を 2 つの名前で持たない |
 | `test_spec_freshness.py` | 7 | 仕様書鮮度チェックの仕組みが揃っていることの構造テスト |

@@ -15,8 +15,8 @@
 | `origin.py` | 作業ディレクトリ・launchd ジョブ名から由来（`Origin`）を決める（`repo_root` / `resolve`）と、止めるときに bootout へ渡すサービス名（`launchd_service`。`<ドメイン>/<ラベル>`。GUI アプリの自動ラベルと `com.apple.*` は除く。`Process.launchd_service` に入り、止め方の案内に使う）。worktree は `.git` ファイルの gitdir をたどって本体のリポへ寄せる | あり（ファイルシステムの読み取りのみ） |
 | `known.py` | 上位に出る macOS のプロセスの説明（`describe`）。対応表は `constants.KNOWN_PROCESSES`、実行ファイル名で完全一致させる（部分一致だと `python WindowServer.py` を OS のプロセスと取り違える） | なし |
 | `llama.py` | llama-server の休止状態（`endpoint` でコマンドから問い合わせ先、`last_transition` でログの最後の休止の出入り。ログは起動し直すと時刻が 0 に戻るので、戻った後の行だけを見る）。付与は `report._with_llm_states` | なし |
-| `group.py` | アプリ名の決め方（`app_label` / `group_label`）と、それをキーにしたアプリ別の集約（`group_processes`） | なし |
-| `churn.py` | 短命プロセスを、数え始めから動いていた祖先（起動元）へ寄せる（`attribute`）。間の親も短命なら、さらに上まで辿る。自分が叩いた ps は数えない。親がどのサンプルにも写らないものは `CHURN_UNKNOWN_PARENT` に入れて本数から落とさない。表示名は `child_name`（`(bash)` の括弧を外し、他は `app_label`） | なし |
+| `group.py` | アプリ名の決め方（`app_label` / `group_label`。インタプリタは動かしているスクリプト名を採り、`-c` / `-e` / `--eval` でコードを直接渡すものは `python3 -c` のように出す）と、それをキーにしたアプリ別の集約（`group_processes`） | なし |
+| `churn.py` | 短命プロセスを、数え始めから動いていた祖先（起動元）へ寄せる（`attribute`）。間の親も短命なら、さらに上まで辿る。自分が叩いた ps は数えない。親がどのサンプルにも写らないものは `CHURN_UNKNOWN_PARENT` に入れて本数から落とさない。表示名は `child_name`（`(bash)` の括弧を外し、ゾンビの `<defunct>` は「(終了済み)」、他は `app_label`） | なし |
 | `aggregate.py` | プロセスを名前で束ねて合計し順位を付ける（`bucket_processes`）。アプリ別・PJ 別で共有 | なし |
 | `report.py` | `collect` × `parse` を組み合わせて一覧・システム状況を構築（短命プロセスの集計 `build_churn` も。ps を繰り返し撮り、`churn.attribute` で起動元へ寄せ、起動元にだけ PJ を付ける） | あり（collect 経由） |
 | `render.py` | `Process` / `SystemMemory` を表 / JSON に整形（`format_mb` 等の整形関数もここ） | なし（出力のみ） |
