@@ -1,0 +1,9 @@
+{
+  "89ee8a945b6d206b": {
+    "lines": 6,
+    "places": [
+      "src/reshog/cli.py:223-228",
+      "src/reshog/cli.py:294-299"
+    ]
+  }
+}

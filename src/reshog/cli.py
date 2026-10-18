@@ -23,7 +23,7 @@ from rich.markup import escape
 
 from . import __version__, control, known, render, report
 from .constants import COMMAND_BY_SORT, CPU_HELP, MEM_HELP
-from .models import Process, View
+from .models import Churn, Process, View
 
 
 def _make_version_callback(program: str) -> Callable[[bool], None]:
@@ -257,26 +257,37 @@ def _render_view(
         processes, top_raw = report.build_processes(count, grep, sort)
     system = report.build_system_memory(top_raw)
     cpu = report.build_system_cpu(top_raw)
+    # CPU 順のときだけ数える(数秒かかる)。一覧に出ない短命プロセスが負荷の原因のことがある。
+    found = report.build_churn() if sort == "cpu" else None
 
     if clear:
         console.clear()
     if view == "project":
         if json_out:
-            typer.echo(render.build_project_json(projects, unknown, system, cpu))
+            typer.echo(render.build_project_json(projects, unknown, system, cpu, found))
         else:
             render.render_project_table(console, projects, unknown, system, cpu, grep, sort)
+            _render_churn(console, found)
         return []
     if view == "group":
         if json_out:
-            typer.echo(render.build_group_json(groups, system, cpu))
+            typer.echo(render.build_group_json(groups, system, cpu, found))
         else:
             render.render_group_table(console, groups, system, cpu, grep, sort)
+            _render_churn(console, found)
         return []
     if json_out:
-        typer.echo(render.build_json(processes, system, cpu))
+        typer.echo(render.build_json(processes, system, cpu, found))
     else:
         render.render_table(console, processes, system, cpu, sort)
+        _render_churn(console, found)
     return processes
+
+
+def _render_churn(console: Console, found: Churn | None) -> None:
+    """数えていれば短命プロセスの表を出す(3 つの表示の末尾で共通)。"""
+    if found is not None:
+        render.render_churn(console, found)
 
 
 def _run_watch(

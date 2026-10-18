@@ -1,13 +1,23 @@
 """collect と parse を組み合わせ、プロセス一覧とシステム状況を構築する。"""
 
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import replace
 from datetime import datetime, timedelta
 from itertools import islice
 
-from . import aggregate, collect, group, llama, origin, parse
-from .constants import GROUP_SAMPLE_MARGIN, GROUP_SAMPLE_MIN
-from .models import LlmState, Process, ProcessGroup, PsEntry, SystemCpu, SystemMemory
+from . import aggregate, churn, collect, control, group, llama, origin, parse
+from .constants import CHURN_POLL_SECONDS, CHURN_SECONDS, GROUP_SAMPLE_MARGIN, GROUP_SAMPLE_MIN
+from .models import (
+    Churn,
+    ChurnSource,
+    LlmState,
+    Process,
+    ProcessGroup,
+    PsEntry,
+    SystemCpu,
+    SystemMemory,
+)
 
 
 def build_processes(
@@ -270,6 +280,48 @@ def _since(process: Process, sleeping: bool) -> datetime | None:
     return process.started_at + last[1]
 
 
+def build_churn(seconds: float = CHURN_SECONDS) -> Churn:
+    """数秒間 ps を撮り続け、新しく生まれたプロセスを起動元ごとに数える。
+
+    top の 2 サンプルの間に生まれて終わるプロセスは CPU の一覧に出ない。負荷平均が
+    高いのに一覧が静かなときの原因(フック・テストの並列実行・CI 等)はここで見える。
+
+    Args:
+        seconds: 数える時間(秒)。
+
+    Returns:
+        Churn。秒数は実際に数えた時間(ps 自体の所要を含む)。
+    """
+    base = parse.parse_ps_snapshot(collect.ps_snapshot())
+    started = _clock()
+    samples: list[dict[int, PsEntry]] = []
+    while True:
+        _sleep(CHURN_POLL_SECONDS)
+        samples.append(parse.parse_ps_snapshot(collect.ps_snapshot()))
+        elapsed = _clock() - started
+        if elapsed >= seconds:
+            break
+
+    found = churn.attribute(base, samples, control.current_pid())
+    parents = [
+        Process(pid=pid, mem_mb=0, rss_mb=0, cpu=0.0, command=base[pid].command)
+        for pid in found
+        if pid in base
+    ]
+    origins = {p.pid: p.origin for p in _with_origins(parents)}
+    sources = [
+        ChurnSource(
+            pid=pid,
+            command=base[pid].command if pid in base else "",
+            origin=origins.get(pid),
+            children=tuple(names),
+        )
+        for pid, names in found.items()
+    ]
+    sources.sort(key=lambda s: s.count, reverse=True)
+    return Churn(seconds=elapsed, sources=tuple(sources))
+
+
 def _with_origins(processes: list[Process]) -> list[Process]:
     """プロセスに由来(PJ)と launchd のジョブ名を付ける。
 
@@ -299,3 +351,13 @@ def _with_origins(processes: list[Process]) -> list[Process]:
 def _now() -> datetime:
     """開始時刻の基準にする現在時刻(テストで差し替える)。"""
     return datetime.now().replace(microsecond=0)
+
+
+def _clock() -> float:
+    """経過時間を測る時計(テストで差し替える)。"""
+    return time.monotonic()
+
+
+def _sleep(seconds: float) -> None:
+    """ps を撮る間を空ける(テストで差し替える)。"""
+    time.sleep(seconds)
