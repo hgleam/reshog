@@ -4,13 +4,14 @@ import json
 import shlex
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 
 from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 from rich.text import Text
 
-from . import known, origin
+from . import churn, known, origin
 from .constants import (
     ALERT_CPU,
     ALERT_MB,
@@ -18,19 +19,22 @@ from .constants import (
     CHURN_TOP_SOURCES,
     CHURN_UNKNOWN_PARENT,
     COMMAND_BY_SORT,
-    LAUNCHD_PID,
     MAX_CMD,
+    TREND_BASELINE,
+    TREND_MIN_PER_SECOND,
+    TREND_RATIO,
+    TREND_RECENT,
+    TREND_TOP,
 )
-from .group import app_label
 from .models import (
     Churn,
-    ChurnSource,
     LlmState,
     Origin,
     Process,
     ProcessGroup,
     SystemCpu,
     SystemMemory,
+    Trend,
 )
 
 
@@ -284,7 +288,7 @@ def render_churn(console: Console, found: Churn | None) -> None:
             str(rank),
             str(source.count),
             _origin_text(source.origin),
-            Text(_source_label(source)),
+            Text(churn.source_label(source)),
             "-" if unknown else str(source.pid),
             Text(source.main_children(CHURN_TOP_CHILDREN)),
         )
@@ -297,14 +301,53 @@ def render_churn(console: Console, found: Churn | None) -> None:
     console.print(table)
 
 
-def _source_label(source: ChurnSource) -> str:
-    """起動元の列の表記。"""
-    if source.pid == CHURN_UNKNOWN_PARENT:
-        return "(親不明)"
-    if source.pid == LAUNCHD_PID:
-        # 親が先に終わった子は launchd に付け替わる。launchd が生んだと誤読させない。
-        return "launchd(親が先に終わったものを含む)"
-    return app_label(source.command)
+def render_recorded(console: Console, record: dict[str, object], path: Path) -> None:
+    """--record の結果(何を書いたか・どこへ)を 2 行で出す。"""
+    by_source = dict(record["by_source"])  # type: ignore[call-overload]
+    top = ", ".join(f"{k} {v}" for k, v in list(by_source.items())[:3])
+    console.print(f"記録しました: 約 {record['per_second']} 本/秒  上位: {escape(top) or '-'}")
+    # パスはコピーされるので折り返さない(途中で改行が入ると、貼り付けても開けない)
+    console.print(f"  [dim]{escape(str(path))}[/dim]", soft_wrap=True)
+
+
+def render_trend(console: Console, found: Trend, broken: int, path: Path) -> None:
+    """--trend の結果。比べられないときは「増えていない」と言わない。"""
+    console.print(
+        f"[bold]== 短命プロセスの増加"
+        f"(直近 {TREND_RECENT.days} 日 / その前 {TREND_BASELINE.days} 日) ==[/bold]"
+    )
+    console.print(
+        f"  [dim]記録: 直近 {found.recent} 回・過去 {found.baseline} 回  "
+        f"{escape(str(path))}[/dim]",
+        soft_wrap=True,
+    )
+    if broken:
+        console.print(f"  [yellow]読めなかった行が {broken} 行あります(数えていません)。[/yellow]")
+    if not found.comparable:
+        console.print(
+            "  [yellow]比べられません: 直近と過去の両方に記録が要ります"
+            "(cpuhog --record を日をまたいで回す)。[/yellow]"
+        )
+        return
+    if not found.rises:
+        console.print(
+            f"  増えたものはありません"
+            f"(毎秒 {TREND_MIN_PER_SECOND:g} 本以上で {TREND_RATIO:g} 倍を超えたもの)。"
+        )
+        return
+    table = Table(header_style="dim", expand=False)
+    table.add_column("種類")
+    table.add_column("名前")
+    table.add_column("直近 本/秒", justify="right")
+    table.add_column("過去 本/秒", justify="right")
+    for rise in found.rises[:TREND_TOP]:
+        table.add_row(
+            "出どころ" if rise.kind == "source" else "中身",
+            Text(rise.name),
+            f"{rise.recent:g}",
+            f"{rise.baseline:g}",
+        )
+    console.print(table)
 
 
 def _churn_payload(found: Churn) -> dict[str, object]:

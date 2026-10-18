@@ -251,3 +251,27 @@ class ProcessGroup:
     def hidden_gpu(self) -> bool:
         """GPU/Metal 常駐と判定されたプロセスを 1 つでも含むか。"""
         return any(p.hidden_gpu for p in self.members)
+
+
+@dataclass(frozen=True)
+class Rise:
+    """前より増えた出どころ(source)か中身の名前(child)。値は毎秒の本数の平均。"""
+
+    kind: str
+    name: str
+    recent: float
+    baseline: float
+
+
+@dataclass(frozen=True)
+class Trend:
+    """比べた結果。直近か過去が 0 件なら比べられない(comparable=False。「増えていない」とは別)。"""
+
+    recent: int
+    baseline: int
+    rises: tuple[Rise, ...]
+
+    @property
+    def comparable(self) -> bool:
+        """直近と過去の両方に記録があるか。"""
+        return self.recent > 0 and self.baseline > 0

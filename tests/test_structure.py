@@ -135,6 +135,14 @@ def test_types_home_holds_no_constants() -> None:
     assert not [n for n, _ in names if _CONSTANT_NAME.match(n)], names
 
 
+# 値が同じでも意味が違う定数の組(理由つき)。片方を直してももう片方は直さないもの。
+_SAME_VALUE_DIFFERENT_MEANING = {
+    frozenset({"LLAMA_PROPS_TIMEOUT_SECONDS", "TREND_MIN_PER_SECOND"}): (
+        "llama-server への問い合わせの待ち秒数と、--trend が知らせる毎秒の本数の下限"
+    ),
+}
+
+
 def test_no_constant_is_written_twice() -> None:
     """同じ値の定数を 2 つの名前で持たない(片方だけ直ってずれる)。"""
     from reshog import constants
@@ -144,7 +152,11 @@ def test_no_constant_is_written_twice() -> None:
         if _CONSTANT_NAME.match(name):
             values.setdefault(repr(getattr(constants, name)), []).append(name)
     assert len(values) >= 10, values
-    duplicated = {v: names for v, names in values.items() if len(names) > 1}
+    duplicated = {
+        v: names
+        for v, names in values.items()
+        if len(names) > 1 and frozenset(names) not in _SAME_VALUE_DIFFERENT_MEANING
+    }
     assert not duplicated, duplicated
 
 
@@ -155,6 +167,7 @@ _DOC_NAMES_NOT_CONSTANTS = {
     "WATCH_PATTERNS": "scripts/check-spec-freshness.sh の変数",
     "LLAMA_ARG_HOST": "llama-server 側の環境変数(reshog は読まないと文書に書いている)",
     "LLAMA_ARG_PORT": "llama-server 側の環境変数(同上)",
+    "RESHOG_CHURN_LOG": "reshog が読む環境変数の名前(定数は CHURN_LOG_ENV)",
 }
 _DOC_CONSTANT = re.compile(r"`(_?[A-Z][A-Z0-9_]{2,})(?: = [^`]*)?`")
 

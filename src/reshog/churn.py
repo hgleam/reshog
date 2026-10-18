@@ -14,11 +14,12 @@ from .constants import (
     ENV_COMMAND,
     ENV_SPLIT_FLAG,
     ENV_VALUE_FLAGS,
+    LAUNCHD_PID,
     SCRIPT_SHELLS,
     SHELL_VALUE_FLAGS,
 )
 from .group import app_label
-from .models import PsEntry
+from .models import ChurnSource, PsEntry
 
 
 def attribute(
@@ -161,3 +162,20 @@ def _shell_script(base: str, args: list[str]) -> str:
             continue
         return arg.rsplit("/", 1)[-1]
     return base
+
+
+def source_label(source: ChurnSource) -> str:
+    """起動元の表記(短命プロセスの表と、記録 --record の出どころの名前で共有する)。
+
+    Args:
+        source: 起動元。
+
+    Returns:
+        表記。親が分からないもの・launchd に付け替わったものは、それと分かる名前にする。
+    """
+    if source.pid == CHURN_UNKNOWN_PARENT:
+        return "(親不明)"
+    if source.pid == LAUNCHD_PID:
+        # 親が先に終わった子は launchd に付け替わる。launchd が生んだと誤読させない。
+        return "launchd(親が先に終わったものを含む)"
+    return app_label(source.command)

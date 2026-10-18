@@ -41,6 +41,8 @@ cpu_app = _build_app("cpuhog", "cpu", CPU_HELP)
 | `--kill` | | `False` | 一覧から PID を選んで停止 |
 | `--force` | | `False` | `--kill` 時に SIGKILL を使う（既定は SIGTERM） |
 | `--yes` | `-y` | `False` | `--kill` の確認プロンプトを省略 |
+| `--record` | | `False` | 短命プロセスを数えて記録へ 1 行足す（`report.record_churn`。置き場は `trend.log_path`） |
+| `--trend` | | `False` | 記録を読み、直近と過去を出どころ・中身の名前ごとに比べる（`report.read_trend`） |
 | `--version` | | | バージョンを表示して終了 |
 
 ## 併用制約・挙動
@@ -51,6 +53,9 @@ cpu_app = _build_app("cpuhog", "cpu", CPU_HELP)
   母集団が「メモリ上位 N 件」のままになり、CPU 上位のプロセスがそもそも含まれない。
   `--group` / `--app` にも同じ値を渡す（集約の並び順・グループ内の最大単体の選び方に効く）。
 - `--watch` は `--json` / `--kill` と**併用不可**（指定時はエラー終了 code 1）。
+- `--record` / `--trend` は単独で使う（`_log_option_error`）。互いに、また `--group` / `--project` / `--app` / `--kill` / `--watch` / `--json` と**併用不可**（code 1）。検査は表示の検査（`_option_error`）より先に行い、通れば `_run_log` へ渡して表示の経路（`_render_view`）は通らない。
+- `--record`: `report.build_churn` で数え、`trend.record_of` で毎秒の本数に直して 1 行の JSON を追記する（`at`・`seconds`・`load`・`per_second`・`by_source`・`by_child`）。出どころの名前は `trend.source_key`（PJ が分かれば `PJ:起動元`。起動元の表記は短命プロセスの表と同じ `churn.source_label`）。ps が読めず数えられなかった回は書かずに code 1（「0 本」と残すと過去の平均が下がり、次の回が増えたように見える）。置き場は環境変数 `RESHOG_CHURN_LOG`、無ければ `CHURN_LOG_DEFAULT`。
+- `--trend`: `trend.read_records` で読み（読めない行は捨てずに数えて出す）、`trend.rising` で直近（`TREND_RECENT`）の平均をその前（`TREND_BASELINE`）の平均と比べる。記録に無い名前はその回 0 本。知らせるのは直近が毎秒 `TREND_MIN_PER_SECOND` 本以上で、過去の `TREND_RATIO` 倍を超えたもの（下限が無いと誤差の揺れまで出て読まれなくなる）。直近と過去のどちらかが 0 件なら「比べられません」と出し、「増えたものはありません」とは出さない。
 - `--watch`: 無限ループで `_render_view(..., clear=True)` → `sleep(interval)`。`_render_view` は
   **データを集め終えてから** `console.clear()` して描画する（全プロセスを走査する `--group` / `--project` は
   数秒〜数十秒かかるため、先に消すとその間画面が空になる）。`Ctrl-C`（KeyboardInterrupt）で終了。
