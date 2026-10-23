@@ -4,7 +4,7 @@
 
 `tests/` 配下、pytest。`collect`（外部コマンド I/O）をモックするため macOS 非依存で CI（Linux）でも動く。
 
-件数は pytest 収集数（parametrize 展開後）。合計 375。文書整合のスクリプト型テスト
+件数は pytest 収集数（parametrize 展開後）。合計 376。文書整合のスクリプト型テスト
 （`python3 tests/test_doc_*.py` でも走るもの）は pytest からは 1 件に見えるので 1 と数え、
 中の検査項目は「対象」に書く。この表と合計は `test_doc_test_counts.py` が実際の収集数と照合する。
 
@@ -22,7 +22,7 @@
 | `test_project_totals.py` | 15 | `--project`: PJ 別の合計と順位 / PJ 不明を順位に混ぜず別に合計 / 全プロセスを 1 回の lsof で引くこと / PJ 列と同じ表記（`origin.label`）/ `bucket_processes` を `--group` と共有 / 表・JSON |
 | `conftest.py` | — | `cell(rendered, pid, column)`: 描画した表から列名でセルを取る（行のどこかの `-` に当たって素通りするのを防ぐ） |
 | `test_launchd_stop.py` | 18 | launchd ジョブの止め方: `origin.launchd_service`（gui / system のドメイン・GUI アプリの自動ラベルと `com.apple.*` は除く）/ `collect.launchd_domain`（root なら system）/ `origin.service_domain`（ラベルに / があってもドメインを取り違えない）/ Apple のジョブも PJ 列はそのまま / PJ がリポ名でもサービス名を持つ / `stop_command`（bootout・shell quote）/ 表の下の案内と戻し方 / `--kill` の警告（確認すれば送る）/ JSON |
-| `test_known_processes.py` | 26 | OS のプロセスの説明: `known.describe`（実行ファイル名の完全一致・OS の置き場所の外の同名ファイルを拾わない）/ Spotlight は止めてよいがすぐ起動し直す / XprotectService は kill せずデベロッパツールへの登録を案内し、効いたかの確認コマンドを添える / 表の行に「ⓘ 用途・止めない」/ 止めてはいけないものは停止の案内を出さない / `--kill` の警告（確認すれば送る） |
+| `test_known_processes.py` | 27 | OS のプロセスの説明: `known.describe`（実行ファイル名の完全一致・OS の置き場所の外の同名ファイルを拾わない）/ Spotlight は止めてよいがすぐ起動し直す / Spotlight の mds・mds_stores・mdworker_shared は役割を書き分ける（同じ説明だと「2 つ動いている」と読まれる） / XprotectService は kill せずデベロッパツールへの登録を案内し、効いたかの確認コマンドを添える / 表の行に「ⓘ 用途・止めない」/ 止めてはいけないものは停止の案内を出さない / `--kill` の警告（確認すれば送る） |
 | `test_llama_sleep.py` | 37 | llama-server の休止状態: `llama.endpoint`（既定値・`=` 形式・IPv6・引用符の崩れ・他のマシンは問い合わせない）/ `http_get` はプロキシを通さない/ `/props` と `launchctl print` の解析 / `last_transition`（起動し直しで時刻が戻る前の行を使わない）/ 時刻は開始時刻＋経過・ログと食い違えば出さない / 表・JSON / `read_tail` は末尾だけ |
 | `test_control.py` | 4 | `control.send_signal`（os.kill をモック・例外→結果コード翻訳）/ `current_pid` |
 | `test_churn.py` | 53 | 短命プロセス: 起動元への寄せ方（数え始めから終わりまで動いていた祖先まで辿る・数え始めに写った短命な親を越える・同じ PID は 1 回・自分の ps は数えない・親不明も落とさない）/ 表示名（シェルと env は素通りして中のスクリプト名・値を取るオプションの値と取り違えない）/ 本数と 1 秒あたり / `build_churn`（実際に数えた秒数で割る・本数順・PJ を付ける・数え始めの ps が読めなければ数えない）/ 表（PJ・起動元・中身の「ほか」・表に出ない分の行・launchd の断り・数えられなかった表示・escape）/ JSON（数えられなければ null）/ CPU 順の全表示でだけ数え、集め終えてから画面を消す |
