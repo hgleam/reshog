@@ -219,14 +219,17 @@ sys が user を大きく上回るときは、個々のプロセスの計算で�
 # キーは実行ファイル名(パスの最後)。値は (何のためのものか, どうするか, 止めてよいか)。
 # 名前だけでは何か分からず、案内どおり kill すると画面が落ちる(WindowServer)ため
 # (2026-09-29 に「これは何？」と聞かれた)。表に出るもの(非 root でコマンドが読めるもの)に限る。
-SPOTLIGHT_NOTE = (
-    "Spotlight の索引づくり",
-    (
-        "止めても害は無いが、すぐ起動し直す(mds は root で動くので止めるには管理者権限も要る)。"
-        "索引が終わるのを待つか、Spotlight の設定で重いフォルダを外す"
-    ),
-    True,
+# Spotlight は役割の違うプロセスの組で動く。同じ説明にすると「索引づくりが 2 つ動いている」と
+# 読まれる(2026-10-24 に聞かれた)ので、役割は書き分け、対処だけ共通にする。
+SPOTLIGHT_ADVICE = (
+    "止めても害は無いが、すぐ起動し直す(mds は root で動くので止めるには管理者権限も要る)。"
+    "索引が終わるのを待つか、Spotlight の設定で重いフォルダを外す"
 )
+SPOTLIGHT_PURPOSES = {
+    "mds": "Spotlight の司令塔(索引づくりの振り分け・検索への応答)",
+    "mds_stores": "Spotlight の索引データベース(索引の書き込み)",
+    "mdworker_shared": "Spotlight の下請け(ファイルの中身を読んで索引に渡す)",
+}
 # OS のプロセスが置かれる場所。ここ以外にある同名のファイル(/tmp/mds 等)は別物として扱う。
 KNOWN_PROCESS_DIRS = ("/System/", "/sbin/")
 KNOWN_PROCESSES: dict[str, tuple[str, str, bool]] = {
@@ -243,9 +246,7 @@ KNOWN_PROCESSES: dict[str, tuple[str, str, bool]] = {
         "止められない。OS そのものが止まる",
         False,
     ),
-    "mds": SPOTLIGHT_NOTE,
-    "mds_stores": SPOTLIGHT_NOTE,
-    "mdworker_shared": SPOTLIGHT_NOTE,
+    **{name: (purpose, SPOTLIGHT_ADVICE, True) for name, purpose in SPOTLIGHT_PURPOSES.items()},
     "com.apple.Virtualization.VirtualMachine": (
         "仮想マシン(Docker Desktop 等)",
         "止めるなら起動元のアプリ(Docker Desktop 等)を終了する。強制終了すると中の作業が失われうる",

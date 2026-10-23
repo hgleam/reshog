@@ -17,10 +17,11 @@ from reshog.render import render_table
 WINDOW_SERVER = (
     "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon"
 )
-MDS_STORES = (
+SPOTLIGHT_SUPPORT = (
     "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/"
-    "Metadata.framework/Versions/A/Support/mds_stores"
+    "Metadata.framework/Versions/A/Support"
 )
+MDS_STORES = f"{SPOTLIGHT_SUPPORT}/mds_stores"
 VM = (
     "/System/Library/Frameworks/Virtualization.framework/Versions/A/XPCServices/"
     "com.apple.Virtualization.VirtualMachine.xpc/Contents/MacOS/com.apple.Virtualization.VirtualMachine"
@@ -57,6 +58,22 @@ class TestDescribe:
         found = known.describe(MDS_STORES)
         assert found is not None and found.stoppable
         assert "起動し直す" in found.advice
+
+    def test_spotlight_processes_have_distinct_purposes(self) -> None:
+        """mds と mds_stores が同じ説明だと「索引づくりが 2 つ動いている」と読まれる。
+
+        2026-10-24 に「なぜ 2 つ動いている？」と聞かれた。
+
+        役割の違う組なので、それぞれの役割を書き分ける。対処(止めてもすぐ起動し直す)は共通。
+        """
+        names = ("mds", "mds_stores", "mdworker_shared")
+        found = [known.describe(f"{SPOTLIGHT_SUPPORT}/{name}") for name in names]
+        assert all(f is not None for f in found)
+        purposes = [f.purpose for f in found if f is not None]
+        assert len(set(purposes)) == len(names), purposes
+        for f in found:
+            assert f is not None and "Spotlight" in f.purpose and f.stoppable
+            assert "起動し直す" in f.advice
 
     def test_vm_is_stopped_from_its_app(self) -> None:
         found = known.describe(VM)
