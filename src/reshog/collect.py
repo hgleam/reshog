@@ -1,4 +1,5 @@
-"""macOS の外部コマンド(top / ps / lsof / launchctl / sysctl / memory_pressure)で状況を読む I/O 層。
+"""macOS の外部コマンド(top / ps / lsof / launchctl / sysctl / memory_pressure / tmux)で
+状況を読む I/O 層。
 
 外部コマンドを叩くのはこのモジュールに限定し、解析ロジック(parse.py)から分離する。
 読むだけで何も変えない。プロセスを止める副作用は control.py に置く。
@@ -123,6 +124,39 @@ def process_elapsed(pids: list[int]) -> str:
     if not pids:
         return ""
     return _run(["ps", "-o", "pid=,etime=", "-p", ",".join(map(str, pids))])
+
+
+def process_envs(pids: list[int]) -> str:
+    """PID 群のコマンド行と環境変数を 1 回の ps で返す(Claude Code の設定フォルダを知るのに使う)。
+
+    自分のユーザーのプロセスだけ環境変数が読める。
+
+    Args:
+        pids: 対象 PID。空なら何も実行しない(-p を空で渡すと ps がエラーになるため)。
+
+    Returns:
+        `ps -E -ww -o pid=,command= -p <pids>` の標準出力。取得できなければ空文字。
+    """
+    if not pids:
+        return ""
+    return _run(["ps", "-E", "-ww", "-o", "pid=,command=", "-p", ",".join(map(str, pids))])
+
+
+def tmux_panes() -> str:
+    """tmux の全ペインの ID と場所(`<セッション名>:<ウィンドウ番号>.<ペイン番号>`)。
+
+    Returns:
+        1 行 1 ペイン、ID と場所をタブで区切った出力。tmux が無い・動いていなければ空文字。
+    """
+    return _run(
+        [
+            "tmux",
+            "list-panes",
+            "-a",
+            "-F",
+            "#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}",
+        ]
+    )
 
 
 def http_get(url: str) -> str:

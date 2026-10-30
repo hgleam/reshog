@@ -3,7 +3,7 @@
 import json
 import shlex
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from rich.console import Console
@@ -18,6 +18,9 @@ from .constants import (
     CHURN_TOP_CHILDREN,
     CHURN_TOP_SOURCES,
     CHURN_UNKNOWN_PARENT,
+    CLAUDE_COLUMN,
+    CLAUDE_IDLE_STATUS,
+    CLAUDE_STATUS_LABELS,
     COMMAND_BY_SORT,
     MAX_CMD,
     TREND_BASELINE,
@@ -28,6 +31,7 @@ from .constants import (
 )
 from .models import (
     Churn,
+    ClaudeSession,
     LlmState,
     Origin,
     Process,
@@ -480,10 +484,12 @@ def render_project_table(
     cpu: SystemCpu,
     grep: str | None = None,
     order: str = "mem",
+    now: datetime | None = None,
 ) -> None:
     """PJ 別(--project)に集約した結果を表形式で出力する。
 
     `--app` は APP 名しか受け取らないので、内訳の提案は出さない。
+    Claude Code のセッションを含む PJ があれば、状態・経過・tmux の位置の列を足す。
 
     Args:
         console: 出力先の rich Console。
@@ -493,11 +499,13 @@ def render_project_table(
         cpu: システム全体の CPU 状況。
         grep: 適用中の -g パターン。
         order: 並べた基準。"mem" または "cpu"。
+        now: 経過の基準にする時刻(テスト用)。None なら今。
     """
     _render_totals(
         console, projects, system, cpu, grep, order,
         title="PJ 別 {resource} (作業ディレクトリの git リポ / launchd ジョブで合算)",
         label_header="PJ",
+        now=now,
     )
     if unknown is not None:
         console.print(
@@ -521,6 +529,7 @@ def _render_totals(
     order: str,
     title: str,
     label_header: str,
+    now: datetime | None = None,
 ) -> None:
     """集約の表と「最大の消費元」を出す(アプリ別 / PJ 別で共通の部分)。
 
@@ -533,8 +542,12 @@ def _render_totals(
         order: 並べた基準。"mem" または "cpu"。
         title: 見出し。`{resource}` が「実メモリ合計」/「CPU合計」に置き換わる。
         label_header: 名前の列の見出し。
+        now: Claude Code のセッションの経過の基準にする時刻。None なら今。
     """
     _render_system(console, system, cpu)
+    # セッションの状態を読んだ表示(--project)にだけ値がある。値が無ければ列を足さない。
+    with_sessions = any(_sessions(g) for g in groups)
+    moment = now or datetime.now()
 
     by_cpu = order == "cpu"
     title = title.format(resource="CPU合計" if by_cpu else "実メモリ合計")
@@ -556,6 +569,9 @@ def _render_totals(
     table.add_column("最大単体", justify="right")
     table.add_column("最大PID", justify="right")
     table.add_column(label_header)
+    if with_sessions:
+        # 省略記号で切らずに折り返す(狭い端末で経過の分数が「5 …」と切れて読めなくなる)
+        table.add_column(CLAUDE_COLUMN, overflow="fold")
 
     for rank, g in enumerate(groups, start=1):
         alert = g.total_cpu >= ALERT_CPU if by_cpu else g.total_mb >= ALERT_MB
@@ -563,7 +579,7 @@ def _render_totals(
         label = Text(g.label, style=row_style)
         if g.hidden_gpu:
             label.append("  ⚠ GPU/Metal常駐(psに出ない)", style="yellow")
-        table.add_row(
+        cells: list[str | Text] = [
             str(rank),
             format_mb(g.total_mb),
             f"{g.total_cpu:g}",
@@ -571,8 +587,11 @@ def _render_totals(
             format_mb(g.largest.mem_mb) if not by_cpu else f"{g.largest.cpu:g}",
             str(g.largest.pid),
             label,
-            style=row_style,
-        )
+        ]
+        if with_sessions:
+            # Text で渡す(tmux のセッション名の [ ] を rich の書式として読まない)
+            cells.append(Text("\n".join(_session_text(s, moment) for _, s in _sessions(g))))
+        table.add_row(*cells, style=row_style)
     console.print(table)
 
     if groups:
@@ -588,8 +607,40 @@ def _render_totals(
         )
 
 
+def _sessions(group: ProcessGroup) -> list[tuple[int, ClaudeSession]]:
+    """グループ内の Claude Code のセッション(待機を先に、それぞれ長く同じ状態のものから)。
+
+    閉じてよい候補(待機)を上に出す。長く作業中のものを待機より上に出さない。
+    """
+    found = [(p.pid, p.claude) for p in group.members if p.claude is not None]
+    return sorted(
+        found,
+        key=lambda item: (
+            item[1].status != CLAUDE_IDLE_STATUS,
+            item[1].since is None,
+            item[1].since or datetime.min,
+        ),
+    )
+
+
+def _session_text(session: ClaudeSession, now: datetime) -> str:
+    """「待機 55分 プライベート1:10.1」(状態・その状態になってからの経過・tmux の位置)。"""
+    status = CLAUDE_STATUS_LABELS.get(session.status, session.status)
+    elapsed = _elapsed(now - session.since) if session.since else "?"
+    return f"{status} {elapsed} {session.tmux or 'tmux外'}"
+
+
+def _elapsed(delta: timedelta) -> str:
+    """経過を「55分」「2時間0分」にする(負は 0 分。時計のずれで先の時刻が書かれていても)。"""
+    minutes = max(0, int(delta.total_seconds() // 60))
+    return f"{minutes // 60}時間{minutes % 60}分" if minutes >= 60 else f"{minutes}分"
+
+
 def _group_items(groups: list[ProcessGroup]) -> list[dict[str, object]]:
-    """集約結果の JSON 要素(アプリ別 / PJ 別で同じ形)。"""
+    """集約結果の JSON 要素(アプリ別 / PJ 別で同じ形)。
+
+    `claude_sessions` は Claude Code のセッションの状態を読んだ表示(--project)でだけ中身が入る。
+    """
     return [
         {
             "rank": rank,
@@ -604,6 +655,15 @@ def _group_items(groups: list[ProcessGroup]) -> list[dict[str, object]]:
                 "cpu": g.largest.cpu,
                 "command": g.largest.command,
             },
+            "claude_sessions": [
+                {
+                    "pid": pid,
+                    "status": s.status,
+                    "since": s.since.isoformat(timespec="seconds") if s.since else None,
+                    "tmux": s.tmux,
+                }
+                for pid, s in _sessions(g)
+            ],
         }
         for rank, g in enumerate(groups, start=1)
     ]

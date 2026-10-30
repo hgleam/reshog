@@ -4,7 +4,7 @@
 
 `tests/` 配下、pytest。`collect`（外部コマンド I/O）をモックするため macOS 非依存で CI（Linux）でも動く。
 
-件数は pytest 収集数（parametrize 展開後）。合計 376。文書整合のスクリプト型テスト
+件数は pytest 収集数（parametrize 展開後）。合計 411。文書整合のスクリプト型テスト
 （`python3 tests/test_doc_*.py` でも走るもの）は pytest からは 1 件に見えるので 1 と数え、
 中の検査項目は「対象」に書く。この表と合計は `test_doc_test_counts.py` が実際の収集数と照合する。
 
@@ -20,6 +20,7 @@
 | `test_origin.py` | 23 | PJ 列: `parse_lsof_cwd` / `parse_launchctl_list` / `repo_root`（worktree・submodule）/ `resolve` の判定順 / 表示分を 1 回の lsof で引くこと / 表・JSON |
 | `test_started.py` | 18 | 起動列: `parse_etime_seconds`（`[[dd-]hh:]mm:ss`）/ `parse_ps_etime` / 「いま − 経過」/ 表・JSON |
 | `test_project_totals.py` | 15 | `--project`: PJ 別の合計と順位 / PJ 不明を順位に混ぜず別に合計 / 全プロセスを 1 回の lsof で引くこと / PJ 列と同じ表記（`origin.label`）/ `bucket_processes` を `--group` と共有 / 表・JSON |
+| `test_claude_sessions.py` | 35 | `--project` の Claude Code のセッション: `claude.is_claude`（本体だけ・MCP サーバー等の子は当てない）/ `session_file`（`CLAUDE_CONFIG_DIR`・既定の `~/.claude`）/ `parse_env_value`（別名の変数に当てない）/ `parse_tmux_panes` / `parse_claude_session`（ペイン ID を番号へ・直せなければ元の値・セッション名が違うペインは使わない・tmux 外・pid が違えば捨てる・時刻が無い・読めない）/ Claude Code の本体にだけ付く / ps と tmux は 1 回ずつ・無ければ叩かない / 表（状態・経過・tmux、1 セッション 1 行で待機を先に・長く同じ状態のものから、[ ] を書式として読まない、80 桁でも切らずに折り返す、無ければ列を出さない）/ JSON |
 | `conftest.py` | — | `cell(rendered, pid, column)`: 描画した表から列名でセルを取る（行のどこかの `-` に当たって素通りするのを防ぐ） |
 | `test_launchd_stop.py` | 18 | launchd ジョブの止め方: `origin.launchd_service`（gui / system のドメイン・GUI アプリの自動ラベルと `com.apple.*` は除く）/ `collect.launchd_domain`（root なら system）/ `origin.service_domain`（ラベルに / があってもドメインを取り違えない）/ Apple のジョブも PJ 列はそのまま / PJ がリポ名でもサービス名を持つ / `stop_command`（bootout・shell quote）/ 表の下の案内と戻し方 / `--kill` の警告（確認すれば送る）/ JSON |
 | `test_known_processes.py` | 27 | OS のプロセスの説明: `known.describe`（実行ファイル名の完全一致・OS の置き場所の外の同名ファイルを拾わない）/ Spotlight は止めてよいがすぐ起動し直す / Spotlight の mds・mds_stores・mdworker_shared は役割を書き分ける（同じ説明だと「2 つ動いている」と読まれる） / XprotectService は kill せずデベロッパツールへの登録を案内し、効いたかの確認コマンドを添える / 表の行に「ⓘ 用途・止めない」/ 止めてはいけないものは停止の案内を出さない / `--kill` の警告（確認すれば送る） |

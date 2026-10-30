@@ -168,6 +168,7 @@ _DOC_NAMES_NOT_CONSTANTS = {
     "LLAMA_ARG_HOST": "llama-server 側の環境変数(reshog は読まないと文書に書いている)",
     "LLAMA_ARG_PORT": "llama-server 側の環境変数(同上)",
     "RESHOG_CHURN_LOG": "reshog が読む環境変数の名前(定数は CHURN_LOG_ENV)",
+    "CLAUDE_CONFIG_DIR": "Claude Code の環境変数の名前(定数は CLAUDE_CONFIG_ENV)",
 }
 _DOC_CONSTANT = re.compile(r"`(_?[A-Z][A-Z0-9_]{2,})(?: = [^`]*)?`")
 

@@ -289,3 +289,25 @@ LLAMA_LOG_TAIL_BYTES = 2 * 1024 * 1024
 LLAMA_LOG_TIME_RE = re.compile(r"^(\d+)\.(\d{2})\.(\d{3})\.(\d{3}) ")
 LLAMA_SLEEP_ENTER = "server is entering sleeping state"
 LLAMA_SLEEP_EXIT = "server is exiting sleeping state"
+
+
+# --- Claude Code のセッション(claude.py) ---
+
+# Claude Code は PID ごとに `<設定フォルダ>/sessions/<PID>.json` へ状態を書き、終わると消す
+# (2026-10-30 に実物を確認)。--project の行に、状態・その状態になってからの経過・
+# tmux の位置を添える。
+CLAUDE_EXECUTABLE = "claude"
+# 設定フォルダはセッションごとに違いうる。そのプロセスの環境変数から読み、無ければ ~/.claude。
+CLAUDE_CONFIG_ENV = "CLAUDE_CONFIG_DIR"
+CLAUDE_DEFAULT_DIR = ".claude"
+CLAUDE_SESSIONS_DIR = "sessions"
+# 状態の表記。意味を実物で確かめた値だけ訳し
+# (busy = 作業中のセッション・idle = 入力待ちのセッション)、
+# 他の値(shell 等)は書かれたまま出す(黙って既知の値へ寄せない)。
+# 閉じてよい候補として表の上に出す状態
+CLAUDE_IDLE_STATUS = "idle"
+CLAUDE_STATUS_LABELS: dict[str, str] = {"busy": "作業中", CLAUDE_IDLE_STATUS: "待機"}
+# --project の表の列見出し(セッションが 1 本も無ければ列ごと出さない)。
+CLAUDE_COLUMN = "Claude(状態・経過・tmux)"
+# tmux の値 `<セッション名>:@<ウィンドウID>.%<ペインID>` からペイン ID を取る。
+CLAUDE_TMUX_PANE_RE = re.compile(r"\.(%\d+)$")
