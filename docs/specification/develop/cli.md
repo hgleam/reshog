@@ -86,6 +86,7 @@ cpu_app = _build_app("cpuhog", "cpu", CPU_HELP)
 - `--group --json`: `render.build_group_json` の出力（`system` と `groups[]`。各要素は
   `label` / `total_mb` / `count` / `hidden_gpu` / `largest{pid, mem_mb, command}`）。
 - `--project --json`: `render.build_project_json` の出力。`groups[]` の代わりに `projects[]`
-  （各要素の形は `groups[]` と同じ）と、`unknown`（PJ 不明の `{total_mb, total_cpu, count}` か `null`）。
+  （各要素の形は `groups[]` と同じ。`claude_sessions[]` に Claude Code のセッションの `{pid, status, since, tmux}` が入る。`since` はローカル時刻の ISO 8601 か `null`。`--group` では常に空）と、`unknown`（PJ 不明の `{total_mb, total_cpu, count}` か `null`）。
+- `--project` の表は、Claude Code のセッションを含む PJ があれば `CLAUDE_COLUMN` の列を足す。1 セッション 1 行で「状態（`CLAUDE_STATUS_LABELS`。訳すのは意味を確かめた busy・idle だけで、他の値はそのまま） 経過 tmux の位置」。経過は状態ファイルの `statusUpdatedAt` から（無ければ `?`）、tmux の外なら `tmux外`。並びは同じ状態が長いものから。列は省略記号で切らず折り返す（80 桁でも経過の分数を残す）。
 - `--project` は `--group` / `--app` / `--kill` と**併用不可**（code 1）。合計の束ね方は 1 つしか
   選べず、停止対象は PID で選ぶため。表の下の提案は出さない（`--app` は APP 名しか受け取らない）。

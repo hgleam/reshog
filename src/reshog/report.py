@@ -8,8 +8,14 @@ from datetime import UTC, datetime, timedelta
 from itertools import islice
 from pathlib import Path
 
-from . import aggregate, churn, collect, control, group, llama, origin, parse, trend
-from .constants import CHURN_POLL_SECONDS, CHURN_SECONDS, GROUP_SAMPLE_MARGIN, GROUP_SAMPLE_MIN
+from . import aggregate, churn, claude, collect, control, group, llama, origin, parse, trend
+from .constants import (
+    CHURN_POLL_SECONDS,
+    CHURN_SECONDS,
+    CLAUDE_CONFIG_ENV,
+    GROUP_SAMPLE_MARGIN,
+    GROUP_SAMPLE_MIN,
+)
 from .models import (
     Churn,
     ChurnSource,
@@ -121,7 +127,7 @@ def build_projects(
         (PJ 別の ProcessGroup のリスト, PJ 不明の合計(無ければ None), top の生出力)。
     """
     processes, _, raw = _scan_all(pattern, order)
-    processes = _with_origins(processes)
+    processes = _with_claude_sessions(_with_origins(processes))
     known = [p for p in processes if p.origin is not None]
     unknown = [p for p in processes if p.origin is None]
     projects = aggregate.bucket_processes(
@@ -349,6 +355,43 @@ def _with_origins(processes: list[Process]) -> list[Process]:
             origin=origin.resolve(cwds.get(p.pid), labels.get(p.pid)),
             launchd_service=origin.launchd_service(labels.get(p.pid), domain),
         )
+        for p in processes
+    ]
+
+
+def _with_claude_sessions(processes: list[Process]) -> list[Process]:
+    """Claude Code の本体に、セッションの状態(状態・経過・tmux の位置)を付ける。
+
+    --project の行で「どれを閉じてよいか・どこを開けば閉じられるか」を出すため。
+    ps(設定フォルダ)と tmux はセッションの数によらず 1 回ずつ叩く。Claude Code が
+    1 本も無ければ何も叩かない。
+
+    Args:
+        processes: 対象プロセス。
+
+    Returns:
+        claude を埋めたプロセス(順序は保つ)。
+    """
+    targets = [p.pid for p in processes if claude.is_claude(p.command)]
+    if not targets:
+        return processes
+    config_dirs = parse.parse_env_value(collect.process_envs(targets), CLAUDE_CONFIG_ENV)
+    panes = parse.parse_tmux_panes(collect.tmux_panes())
+    home = Path.home()
+    wanted = set(targets)
+    return [
+        replace(
+            p,
+            claude=parse.parse_claude_session(
+                collect.read_tail(
+                    str(claude.session_file(config_dirs.get(p.pid), home, p.pid))
+                ),
+                p.pid,
+                panes,
+            ),
+        )
+        if p.pid in wanted
+        else p
         for p in processes
     ]
 

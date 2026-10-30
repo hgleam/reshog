@@ -4,9 +4,10 @@
 """
 
 import json
+from datetime import datetime
 
-from .constants import MEM_RE, UNIT_TO_MB
-from .models import PsEntry
+from .constants import CLAUDE_TMUX_PANE_RE, MEM_RE, UNIT_TO_MB
+from .models import ClaudeSession, PsEntry
 
 
 def parse_mem_to_mb(value: str) -> float:
@@ -294,3 +295,86 @@ def parse_launchctl_stderr_path(output: str) -> str | None:
         if sep and key == "stderr path" and value:
             return value
     return None
+
+
+def parse_env_value(output: str, name: str) -> dict[int, str]:
+    """`ps -E -ww -o pid=,command=` の出力から、PID ごとに環境変数 1 つの値を取り出す。
+
+    環境変数はコマンド行の後ろに空白区切りで続く。値に空白を含むものは先頭の語までしか取れない。
+
+    Args:
+        output: ps の標準出力。
+        name: 環境変数の名前(`MY_<name>` のような別の名前には当てない)。
+
+    Returns:
+        {PID: 値}。その変数を持たない PID は含まない。
+    """
+    prefix = f"{name}="
+    found: dict[int, str] = {}
+    for line in output.splitlines():
+        words = line.split()
+        if not words or not words[0].isdigit():
+            continue
+        value = next((w[len(prefix):] for w in words[1:] if w.startswith(prefix)), None)
+        if value:
+            found[int(words[0])] = value
+    return found
+
+
+def parse_tmux_panes(output: str) -> dict[str, str]:
+    """`tmux list-panes -a -F '#{pane_id}<TAB><場所>'` の出力を {ペイン ID: 場所} にする。
+
+    Args:
+        output: tmux の標準出力。tmux が無い・動いていなければ空文字。
+
+    Returns:
+        {"%111": "プライベート1:10.1", ...}。
+    """
+    found: dict[str, str] = {}
+    for line in output.splitlines():
+        pane, sep, where = line.partition("\t")
+        if sep and pane.startswith("%") and where:
+            found[pane] = where
+    return found
+
+
+def parse_claude_session(
+    text: str, pid: int, panes: dict[str, str]
+) -> ClaudeSession | None:
+    """Claude Code の状態ファイル(`sessions/<PID>.json`)を読む。
+
+    Args:
+        text: ファイルの中身。
+        pid: 読んでいるプロセスの PID。ファイルの pid と違えば別のプロセスのものとして捨てる
+            (PID が使い回されて古いファイルが残っていても、別のプロセスの状態を出さない)。
+        panes: parse_tmux_panes の結果。ペイン ID を人が打つ番号へ直すのに使う。
+            セッション名が書かれていた値と違えば直さない。
+
+    Returns:
+        ClaudeSession。読めない・pid が違う・status が無ければ None。
+    """
+    try:
+        payload = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(payload, dict) or payload.get("pid") != pid:
+        return None
+    status = payload.get("status")
+    if not isinstance(status, str) or not status:
+        return None
+    updated = payload.get("statusUpdatedAt")
+    since = (
+        datetime.fromtimestamp(updated / 1000).replace(microsecond=0)
+        if isinstance(updated, int) and not isinstance(updated, bool)
+        else None
+    )
+    raw = payload.get("tmux")
+    tmux: str | None = None
+    if isinstance(raw, str) and raw:
+        match = CLAUDE_TMUX_PANE_RE.search(raw)
+        where = panes.get(match.group(1), "") if match else ""
+        # ペイン ID は tmux サーバーごとの番号。セッション名まで同じときだけ同じペインとみなす
+        # (別のサーバー(-L)の同じ番号のペインに化けて、違う場所を案内しない)。
+        same = where.partition(":")[0] == raw.partition(":")[0]
+        tmux = where if where and same else raw
+    return ClaudeSession(status=status, since=since, tmux=tmux)

@@ -7,14 +7,15 @@
 
 | モジュール | 役割 | 副作用 |
 |-----------|------|--------|
-| `collect.py` | `top` / `ps` / `sysctl` / `memory_pressure` / `lsof` / `launchctl` と負荷平均（`load_average`）で状況を読む薄い I/O 層。読むだけで何も変えない | あり（subprocess） |
+| `collect.py` | `top` / `ps` / `sysctl` / `memory_pressure` / `lsof` / `launchctl` / `tmux` と負荷平均（`load_average`）で状況を読む薄い I/O 層。読むだけで何も変えない | あり（subprocess） |
 | `control.py` | プロセスの停止（`send_signal` = `os.kill`）と自 PID 取得（`current_pid`）。取り消せない副作用をここに閉じる | あり（os.kill） |
-| `parse.py` | top・memory_pressure の出力を解析する純粋関数群 | なし |
-| `models.py` | 型の置き場。ドメインモデル（`Process` / `PsEntry` / `ProcessGroup` / `SystemMemory` / `Origin` / `Churn` / `ChurnSource` / `Rise` / `Trend`）・表示の種類（`View`）と判定ロジック | なし |
+| `parse.py` | top・memory_pressure の出力を解析する純粋関数群（Claude Code の状態ファイル `parse_claude_session`・環境変数 `parse_env_value`・tmux のペイン `parse_tmux_panes` も） | なし |
+| `models.py` | 型の置き場。ドメインモデル（`Process` / `PsEntry` / `ProcessGroup` / `SystemMemory` / `Origin` / `ClaudeSession` / `Churn` / `ChurnSource` / `Rise` / `Trend`）・表示の種類（`View`）と判定ロジック | なし |
 | `constants.py` | 定数の唯一の置き場（しきい値・コマンド名・`--help` の説明文）。実装のファイル・型の置き場には定数を置かない | なし |
 | `origin.py` | 作業ディレクトリ・launchd ジョブ名から由来（`Origin`）を決める（`repo_root` / `resolve`）と、止めるときに bootout へ渡すサービス名（`launchd_service`。`<ドメイン>/<ラベル>`。GUI アプリの自動ラベルと `com.apple.*` は除く。`Process.launchd_service` に入り、止め方の案内に使う）。worktree は `.git` ファイルの gitdir をたどって本体のリポへ寄せる | あり（ファイルシステムの読み取りのみ） |
 | `known.py` | 上位に出る macOS のプロセスの説明（`describe`）。対応表は `constants.KNOWN_PROCESSES`、実行ファイル名で完全一致させる（部分一致だと `python WindowServer.py` を OS のプロセスと取り違える） | なし |
 | `llama.py` | llama-server の休止状態（`endpoint` でコマンドから問い合わせ先、`last_transition` でログの最後の休止の出入り。ログは起動し直すと時刻が 0 に戻るので、戻った後の行だけを見る）。付与は `report._with_llm_states` | なし |
+| `claude.py` | Claude Code のセッション（`is_claude` で本体のプロセスを見分け、`session_file` で状態ファイル `<設定フォルダ>/sessions/<PID>.json` の場所を決める。設定フォルダはそのプロセスの `CLAUDE_CONFIG_DIR`、無ければ `~/.claude`）。付与は `report._with_claude_sessions`（`--project` のときだけ） | なし |
 | `group.py` | アプリ名の決め方（`app_label` / `group_label`。インタプリタは動かしているスクリプト名を採り、`-c` / `-e` / `--eval` でコードを直接渡すものは `python3 -c` のように出す）と、それをキーにしたアプリ別の集約（`group_processes`） | なし |
 | `churn.py` | 短命プロセスを、数え始めから動いていた祖先（起動元）へ寄せる（`attribute`）。間の親も短命なら、さらに上まで辿る。自分が叩いた ps は数えない。親がどのサンプルにも写らないものは `CHURN_UNKNOWN_PARENT` に入れて本数から落とさない。表示名は `child_name`（`(bash)` の括弧を外し、ゾンビの `<defunct>` は「(終了済み)」、シェル（`SCRIPT_SHELLS`）と `env` は素通りして中で動かしているスクリプト名、他は `app_label`。pyenv の shim は器の名前だと bash・env としか出ず原因が隠れる）。起動元の表記は `source_label`（表と `--record` の出どころの名前で共有） | なし |
 | `trend.py` | 短命プロセスの記録と増加（`--record` / `--trend`）の純粋関数群。`record_of` で毎秒の本数の 1 行に直し、`read_records` で読み（読めない行は数える。タイムゾーンの無い時刻・数でない本数も読めない行）、`rising` で直近と過去の平均を出どころ・中身の名前ごとに比べる（下限と倍率で絞る。どちらかが 0 件なら比べられないと返す。今より先の時刻は `future` に数えて比べない）。置き場は `log_path` | なし |
@@ -62,8 +63,12 @@ cli.main
 ```
 
 `--project` 指定時（PJ 別の合計）: `report.build_projects` が `--group` と同じ全プロセス走査
-（`report._scan_all`）を使い、`report._with_origins` で PJ 列と同じ由来を付けてから
-`aggregate.bucket_processes` で束ねる。`--group` の `group_processes` も同じ `bucket_processes` に
+（`report._scan_all`）を使い、`report._with_origins` で PJ 列と同じ由来を付け、
+`report._with_claude_sessions` で Claude Code の本体にセッションの状態（`Process.claude`）を付けてから
+`aggregate.bucket_processes` で束ねる。セッションの状態は ps（`collect.process_envs` で設定フォルダ）と
+tmux（`collect.tmux_panes` でペイン ID → 番号）を 1 回ずつ叩いて読む。Claude Code が 1 本も無ければ叩かない。
+表の列（`CLAUDE_COLUMN`）は `_render_totals` がグループの中身から決める（セッションを持つグループが無ければ列を出さない）。
+会話ログ（jsonl）の更新時刻では推定しない（同じ作業場所のセッションがログの置き場を共有し、再開したセッションは別の ID のログへ書くため）。`--group` の `group_processes` も同じ `bucket_processes` に
 キー（`group_label`）を渡しているだけなので、合計・並べ方の規則は 1 か所にある。
 PJ の表記は `origin.label` が正本（PJ 列の表示と束ねるキーが同じ文字列になる）。
 PJ 不明のプロセスは順位に入れず、別の `ProcessGroup` として返す。

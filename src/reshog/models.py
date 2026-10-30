@@ -38,6 +38,22 @@ class LlmState:
 
 
 @dataclass(frozen=True)
+class ClaudeSession:
+    """Claude Code のセッションの状態(`<設定フォルダ>/sessions/<PID>.json` から)。
+
+    Attributes:
+        status: busy / idle / shell 等(Claude Code が書いた値のまま)。
+        since: その状態になった時刻(ローカル時刻)。書かれていなければ None。
+        tmux: 開けば閉じられる場所(`<セッション名>:<ウィンドウ番号>.<ペイン番号>`)。
+            番号に直せなければ書かれていた値のまま。tmux の外なら None。
+    """
+
+    status: str
+    since: datetime | None
+    tmux: str | None
+
+
+@dataclass(frozen=True)
 class KnownProcess:
     """OS のプロセスの説明(何のためのものか・止めてよいか)。
 
@@ -68,6 +84,8 @@ class Process:
             ジョブでなければ None。KeepAlive のジョブは kill しても起動し直されるので、
             止め方の案内が変わる。
         llm_state: llama-server の休止状態。llama-server でない・問い合わせられなければ None。
+        claude: Claude Code のセッションの状態。Claude Code でない・読めなければ None。
+            --project のときだけ読む。
     """
 
     pid: int
@@ -79,6 +97,7 @@ class Process:
     started_at: datetime | None = None
     launchd_service: str | None = None
     llm_state: LlmState | None = None
+    claude: ClaudeSession | None = None
 
     @property
     def hidden_gpu(self) -> bool:
