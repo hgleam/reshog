@@ -3,4 +3,6 @@
 コマンドは 2 つ: memhog(実メモリ順) / cpuhog(CPU 順)。
 """
 
-__version__ = "0.1.0"
+from .constants import VERSION
+
+__version__ = VERSION

@@ -1,25 +1,49 @@
 #!/usr/bin/env bash
-# 素の git hook（husky は使わない）。有効化: git config core.hooksPath .githooks
+# 素の git hook（husky は使わない）。有効化は core.hooksPath を使わず、.git/hooks の全体の pre-commit から
+# pre-commit.pre-guard として連鎖で呼ぶ（skills/init/SKILL.md の 3P-2。hooksPath は全体の門 3 本を黙って止める）。
 
 # main/master への直接コミットを禁止
-branch=$(git rev-parse --abbrev-ref HEAD)
+# **symbolic-ref を使う。** rev-parse --abbrev-ref HEAD は**コミットが1つも無いリポジトリで
+# 失敗**し、branch が空になって main 判定を素通りする。つまり「作りたて＝門を一番入れたい
+# 瞬間」に効かない（🔬 2026-08-10 実測: 新規 repo で main 上のコミットがブロックされなかった）。
+branch=$(git symbolic-ref --short -q HEAD || echo "")
 if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
   echo "⚠  main/master への直接コミットは禁止です。ブランチを切ってください。"
   exit 1
 fi
 
 # 仕様書の鮮度チェック
-bash scripts/check-spec-freshness.sh || exit 1
+# **終了コードを見ること。** 呼びっぱなしだと exit 1 を返してもコミットが成立する
+# （警告は表示されるので「効いている」と誤認しやすい。2026-08 の /init 実地検証で発覚）。
+if ! bash scripts/check-spec-freshness.sh; then
+  exit 1
+fi
 
-# ドキュメント整合（構成ツリー・文書の数値・再掲）を手元で止める。
-# CI にも載っているが、push するまで気づかないと1往復増えるためここでも回す。
-# 標準ライブラリのみ・1秒未満（Poetry の環境に入っていなくても動く）。
-for t in tests/test_doc_tree.py tests/test_doc_facts.py tests/test_doc_dedup.py tests/test_spec_no_history.py; do
+# フックの中は GIT_DIR・GIT_INDEX_FILE などが環境に入っている。残したままテストを流すと、テストが一時リポで
+# 呼ぶ git（init・commit・worktree add）がこの clone に及ぶ（実測: ステージを "init" で確定し core.bare=true に書き換えた）。
+for v in $(git rev-parse --local-env-vars); do unset "$v"; done
+
+if ! command -v uv >/dev/null 2>&1; then
+  # PATH に uv が無い環境（git を GUI から呼ぶ等）で、文書だけの変更まで止めない。
+  # main 保護と仕様鮮度の門は上で済んでいる。テストは、CI があればそこで流れる場合がある（全件を流す保証は
+  # 無い。CI が無い・GitHub remote が無いリポでは、uv を入れるまでこの門のテストが抜ける。警告はその合図）。
+  echo "⚠  uv が見つかりません。コミット前のテストを飛ばします（uv を入れるまで、全件のテストは保証されません。CI があれば流れる場合があります）。" >&2
+  exit 0
+fi
+
+# すべてのテストを glob で列挙して流す（tests/test_all_tests_wired.py が形を固定する）。
+# pytest 形式（def test_ / class Test）は pytest へ、script 形式は単体実行する。逆にすると空検査になる。
+pytest_targets=()
+for t in tests/test_*.py; do
   [ -f "$t" ] || continue
-  if ! out=$(python3 "$t" 2>&1); then
-    echo "⚠  $t が失敗しました（ドキュメントの整合が崩れています）:"
-    printf '%s\n' "$out" | grep -E '^FAIL|^  ' | head -20
-    echo "   直してから再コミットしてください（詳細: python3 $t）"
-    exit 1
+  if grep -qE '^(async[[:space:]]+)?def test_|^class Test' "$t"; then
+    pytest_targets+=("$t"); continue
+  fi
+  if ! out=$(uv run python "$t" 2>&1); then
+    echo "⚠  $t が失敗:"; printf '%s\n' "$out" | tail -20; exit 1
   fi
 done
+if [ ${#pytest_targets[@]} -gt 0 ]; then
+  # このリポの dev 依存は Poetry の group にあり、uv は読まない。pytest だけ一時的に足して流す。
+  uv run --with pytest pytest -q "${pytest_targets[@]}" || exit 1
+fi

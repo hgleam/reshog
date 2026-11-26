@@ -7,6 +7,9 @@
 import re
 from datetime import timedelta
 
+# --version が出す版(cli.py が読む。パッケージの入口 __init__ を層から読ませないため、ここが正本)
+VERSION = "0.1.0"
+
 # --- 判定のしきい値・コマンド名(models.py) ---
 
 # GPU/Metal 常駐(ps に出ない)判定のしきい値

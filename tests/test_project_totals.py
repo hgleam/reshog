@@ -26,7 +26,7 @@ PID    MEM   %CPU
 """
 _PS = """\
 100 1 1024 /opt/homebrew/bin/llama-server
-200 1 1024 /Users/me/.local/bin/claude
+200 1 1024 /Share/me/.local/bin/claude
 300 1 1024 /usr/bin/python worker.py
 400 1 1024 /Applications/Chrome.app/Contents/MacOS/Chrome
 500 1 1024 /usr/libexec/daemon

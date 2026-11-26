@@ -101,7 +101,7 @@ class TestDescribe:
             "python WindowServer.py",
             # OS の置き場所の外にある同名のファイルは別物
             "/tmp/mds",
-            "/Users/me/bin/launchd",
+            "/Share/me/bin/launchd",
             "",
         ],
     )

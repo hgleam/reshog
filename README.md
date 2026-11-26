@@ -4,6 +4,12 @@
 
 macOS の**実メモリ(物理フットプリント)を最も食っているプロセスを特定して提示する**診断 CLI。
 
+## 何をするものか
+
+Mac が重い・メモリが足りないと感じた人が、**どのプロセス（どのアプリ・どのプロジェクト）が実メモリと CPU を食っているか**を、
+ターミナルで 1 コマンドで知るための診断 CLI。`memhog`（実メモリ順）と `cpuhog`（CPU 順）の 2 つで、
+出力を見て止めるプロセスを選び、そのまま `--kill` で止めるところまで進める。
+
 ## なぜ必要か
 
 `ps aux` の RSS は **Metal/MPS（Apple Silicon の GPU 共有＝ユニファイドメモリ）を数えない**。
@@ -139,6 +145,7 @@ memhog                                    # どこからでも
 ```
 .
 ├── README.md
+├── CLAUDE.md                       # このリポジトリだけに効く AI への指示
 ├── pyproject.toml                  # Poetry（依存・entry point memhog / cpuhog）
 ├── .claude/
 ├── .githooks/

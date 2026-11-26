@@ -31,7 +31,7 @@ from reshog.render import build_project_json, render_project_table
 SESSION = {
     "pid": 96868,
     "sessionId": "a7d37697-e687-4146-8ce6-6243684560fb",
-    "cwd": "/Users/me/develop/monetization-lab",
+    "cwd": "/Share/me/develop/monetization-lab",
     "kind": "interactive",
     "tmux": "プライベート1:@51.%111",
     "status": "idle",
@@ -48,7 +48,7 @@ class TestIsClaude:
     @pytest.mark.parametrize(
         "command",
         [
-            "/Users/me/.local/bin/claude --dangerously-skip-permissions",
+            "/Share/me/.local/bin/claude --dangerously-skip-permissions",
             "claude --resume 60335642-38b6-4b74-8fb5-1b2f906ab431",
             "claude",
         ],
@@ -60,7 +60,7 @@ class TestIsClaude:
         "command",
         [
             "/usr/bin/python claude.py",
-            "/Users/me/.local/bin/claude-code-helper",
+            "/Share/me/.local/bin/claude-code-helper",
             "node /opt/claude/server.js",
             "",
         ],
@@ -71,8 +71,8 @@ class TestIsClaude:
 
 class TestSessionFile:
     def test_config_dir_from_the_environment(self, tmp_path: Path) -> None:
-        got = claude.session_file("/Users/me/claude-techknight/.claude", tmp_path, 87386)
-        assert got == Path("/Users/me/claude-techknight/.claude/sessions/87386.json")
+        got = claude.session_file("/Share/me/claude-techknight/.claude", tmp_path, 87386)
+        assert got == Path("/Share/me/claude-techknight/.claude/sessions/87386.json")
 
     def test_default_config_dir(self, tmp_path: Path) -> None:
         """CLAUDE_CONFIG_DIR を付けずに起動したセッションは ~/.claude に書く。"""
@@ -83,7 +83,7 @@ class TestSessionFile:
 class TestParseEnvValue:
     def test_value_per_pid(self) -> None:
         out = (
-            "96868 /Users/me/.local/bin/claude --x PATH=/bin CLAUDE_CONFIG_DIR=/a/.claude TERM=x\n"
+            "96868 /Share/me/.local/bin/claude --x PATH=/bin CLAUDE_CONFIG_DIR=/a/.claude TERM=x\n"
             "87386 claude --resume X CLAUDE_CONFIG_DIR=/b/.claude\n"
             "1 claude\n"
         )
@@ -149,7 +149,7 @@ class TestParseSession:
 
 _TOP = "PID MEM %CPU\n200 1000M 30.0\n201 300M 1.0\n300 500M 0.0\n"
 _PS = (
-    "200 1 1024 /Users/me/.local/bin/claude --dangerously-skip-permissions\n"
+    "200 1 1024 /Share/me/.local/bin/claude --dangerously-skip-permissions\n"
     "201 200 1024 npm exec @playwright/mcp@latest\n"
     "300 1 1024 /usr/bin/python worker.py\n"
 )
