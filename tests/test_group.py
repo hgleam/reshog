@@ -24,7 +24,7 @@ class TestAppLabel:
                 "Google Chrome",
             ),
             ("/opt/homebrew/bin/llama-server -hf unsloth/Qwen3", "llama-server"),
-            ("node /Users/x/.npm/_npx/abc/node_modules/.bin/playwright-mcp", "playwright-mcp"),
+            ("node /Share/x/.npm/_npx/abc/node_modules/.bin/playwright-mcp", "playwright-mcp"),
             ("/usr/bin/python main.py --port 8188", "main.py"),
             ("/usr/bin/python3 -m uvicorn tokyocal.web:app", "uvicorn"),
             # -c / -e の次はコードで、スクリプト名ではない(「import」と出ていた)。
@@ -39,9 +39,9 @@ class TestAppLabel:
     def test_interpreter_bundle_is_not_the_app_name(self) -> None:
         """Python.app は「入れ物」なので、動かしているスクリプト名を採る。"""
         command = (
-            "/Users/x/.pyenv/versions/3.11.15/Library/Frameworks/Python.framework/"
+            "/Share/x/.pyenv/versions/3.11.15/Library/Frameworks/Python.framework/"
             "Versions/3.11/Resources/Python.app/Contents/MacOS/Python "
-            "/Users/x/.local/bin/koekaki menubar"
+            "/Share/x/.local/bin/koekaki menubar"
         )
         assert app_label(command) == "koekaki"
 
@@ -52,9 +52,9 @@ class TestGroupLabel:
         snapshot = {
             1: _entry(1, 0, "/sbin/launchd"),
             10: _entry(10, 1, "/Applications/ixBrowser.app/Contents/MacOS/ixBrowser"),
-            11: _entry(11, 10, "/Users/x/Library/Application Support/ixBrowser-Resources/"
+            11: _entry(11, 10, "/Share/x/Library/Application Support/ixBrowser-Resources/"
                                 "chrome/142/Chromium.app/Contents/MacOS/Chromium"),
-            12: _entry(12, 11, "/Users/x/Library/Application Support/ixBrowser-Resources/"
+            12: _entry(12, 11, "/Share/x/Library/Application Support/ixBrowser-Resources/"
                                 "chrome/142/Chromium.app/Contents/MacOS/Chromium --type=renderer"),
         }
         assert group_label(12, snapshot) == "ixBrowser"
@@ -66,7 +66,7 @@ class TestGroupLabel:
             1: _entry(1, 0, "/sbin/launchd"),
             20: _entry(20, 1, "tmux new-session"),
             21: _entry(21, 20, "-zsh"),
-            22: _entry(22, 21, "/Users/x/.local/bin/claude --resume"),
+            22: _entry(22, 21, "/Share/x/.local/bin/claude --resume"),
         }
         assert group_label(22, snapshot) == "claude"
 

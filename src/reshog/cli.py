@@ -21,8 +21,8 @@ import typer
 from rich.console import Console
 from rich.markup import escape
 
-from . import __version__, control, known, render, report
-from .constants import COMMAND_BY_SORT, CPU_HELP, MEM_HELP
+from . import control, known, render, report
+from .constants import COMMAND_BY_SORT, CPU_HELP, MEM_HELP, VERSION
 from .models import Churn, Process, View
 
 
@@ -38,7 +38,7 @@ def _make_version_callback(program: str) -> Callable[[bool], None]:
 
     def _callback(value: bool) -> None:
         if value:
-            typer.echo(f"{program} {__version__}")
+            typer.echo(f"{program} {VERSION}")
             raise typer.Exit()
 
     return _callback

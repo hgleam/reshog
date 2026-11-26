@@ -4,7 +4,7 @@
 
 `tests/` 配下、pytest。`collect`（外部コマンド I/O）をモックするため macOS 非依存で CI（Linux）でも動く。
 
-件数は pytest 収集数（parametrize 展開後）。合計 411。文書整合のスクリプト型テスト
+件数は pytest 収集数（parametrize 展開後）。合計 441。文書整合のスクリプト型テスト
 （`python3 tests/test_doc_*.py` でも走るもの）は pytest からは 1 件に見えるので 1 と数え、
 中の検査項目は「対象」に書く。この表と合計は `test_doc_test_counts.py` が実際の収集数と照合する。
 
@@ -36,6 +36,14 @@
 | `test_doc_dedup.py` | 1 | 文書間の再掲（本文で 40 文字以上の同一行が2文書にあれば FAIL） |
 | `test_spec_no_history.py` | 1 | 仕様書に変更履歴（日付付きの「変更」「追加」等）が混ざっていないこと |
 | `test_doc_test_counts.py` | 1 | この表 ↔ pytest の実際の収集数（行の漏れ・幽霊・件数・合計） |
+| `test_directory_readmes.py` | 5 | git 管理下のディレクトリが README.md を持つこと（`.claude` は除外・`.github` は置かない）／ルート README の最初の節が「何をするものか」で冒頭に文があること／除外・黙認がリテラルで書かれていること |
+| `test_claude_md_budget.py` | 1 | `CLAUDE.md` と `.claude/rules/` が予算（バイト数）を超えて育っていないこと |
+| `test_no_secret_literals.py` | 1 | 追跡ファイルに資格情報・個人ディレクトリパスのリテラルが無いこと（検出器の検体・誤検出の確認つき） |
+| `test_all_tests_wired.py` | 7 | pre-commit が全テストを glob で列挙し、pytest 形式と script 形式を振り分けること／どのテストもいずれかのゲートから実行されること |
+| `test_src_layers.py` | 6 | `src/reshog/` は 1 ファイル 1 層で、import の向きが層の表どおりであること／直下に層以外を置かない／標準ライブラリと同名のファイルを置かない |
+| `test_layer_side_effects.py` | 4 | 副作用のモジュール（`subprocess`・`urllib.request`）とファイルの書き換えを、表に載せたファイルだけが持つこと |
+| `test_definitions_live_apart.py` | 4 | 実装のファイルに定数・型を置かないこと（`models.py` は理由つきで黙認）／同じ値の定数を 2 か所に書かない |
+| `test_code_shape_ratchet.py` | 2 | コードの形（ファイル・関数の行数・複雑度・直下の本数）が台帳より悪化していないこと（予算超えを増やさない・新しく超えない） |
 
 ### ドキュメント整合のテスト
 
@@ -47,6 +55,11 @@
   同じファイル名がツリーに現れるのは1箇所だけなので二重化しない。
 - 標準ライブラリのみで動くので、CI では**依存 install より前**に `Doc integrity` として走る
   （install が失敗しても文書のズレは検出できる）。`pytest` でも収集される。
+- 層と副作用の検査（`test_src_layers.py`・`test_layer_side_effects.py`・`test_definitions_live_apart.py`）は
+  `src/reshog/` の import の向き・副作用の置き場・定数と型の置き場を固定する。表は `architecture.md` の
+  「レイヤ構成」と同じ内容で、片方を直したらもう片方も直す。
+- コードの形のラチェット（`test_code_shape_ratchet.py`）は、台帳 `docs/metrics/code-shape.json` より悪化した向きだけ落とす。
+  測る道具は `scripts/code_shape/`。直したら `python3 scripts/code_shape --update-baseline <直したファイル>` で台帳を下げる。
 - 雛形は `~/claude-private/.claude/skills/init/templates/`。他プロジェクトへも同手順で入る。
 
 実行:
@@ -83,8 +96,13 @@ poetry run mypy src       # 型チェック
 - `scripts/check-spec-freshness.sh` が、監視対象コード（`WATCH_PATTERNS`）を変更したのに
   `docs/specification/` を更新していないコミットをブロックする。
 - 有効化は `.githooks/` を `core.hooksPath` に設定する方式（husky は使わない）。
+  （init の標準は `core.hooksPath` を使わず `.git/hooks` から連鎖で呼ぶ形で、この案内との差は未解決。`docs/devlog.md` の未決に記録している）
   **別クローンでは `git config core.hooksPath .githooks` を再実行する必要がある**（README のセットアップ手順参照）。
 - 仕様変更でない場合は `git commit --no-verify` でスキップ可能。
+- 同じ pre-commit が `tests/test_*.py` を glob で全部流す（pytest 形式は `uv run --with pytest pytest`、
+  script 形式は `uv run python <file>`。振り分けは `test_all_tests_wired.py` が固定する）。
+  このリポジトリの dev 依存は Poetry の group にあり uv は読まないので、pytest だけ `--with` で足す。
+  `uv` が PATH に無い環境ではテストを飛ばして警告を出す（main 保護と仕様鮮度の門は先に済む）。
 
 ## 自動マージ
 

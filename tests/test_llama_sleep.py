@@ -84,9 +84,9 @@ class TestParse:
     def test_launchctl_stderr_path(self) -> None:
         raw = (
             "gui/501/com.x = {\n\tstdout path = /tmp/out.log\n"
-            "\tstderr path = /Users/me/logs/llama-server-stderr.log\n}\n"
+            "\tstderr path = /Share/me/logs/llama-server-stderr.log\n}\n"
         )
-        assert parse_launchctl_stderr_path(raw) == "/Users/me/logs/llama-server-stderr.log"
+        assert parse_launchctl_stderr_path(raw) == "/Share/me/logs/llama-server-stderr.log"
         assert parse_launchctl_stderr_path("") is None
 
 

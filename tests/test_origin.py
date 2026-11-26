@@ -21,16 +21,16 @@ from reshog.render import build_json, render_table
 LSOF_SAMPLE = """\
 p20193
 fcwd
-n/Users/me/develop/private/tokyo-calendar
+n/Share/me/develop/private/tokyo-calendar
 p2299
 fcwd
 n/
 p99856
 fcwd
-n/Users/me/develop/private/tokyo-calendar/.claude/worktrees/pushblk
+n/Share/me/develop/private/tokyo-calendar/.claude/worktrees/pushblk
 p4539
 fcwd
-n/Users/me/dir with space
+n/Share/me/dir with space
 """
 
 # `launchctl list` の実出力の形(PID / 直近の終了コード / ラベル。止まっているものは "-")。
@@ -45,11 +45,11 @@ PID\tStatus\tLabel
 class TestParseLsofCwd:
     def test_maps_pid_to_cwd(self) -> None:
         cwds = parse_lsof_cwd(LSOF_SAMPLE)
-        assert cwds[20193] == "/Users/me/develop/private/tokyo-calendar"
+        assert cwds[20193] == "/Share/me/develop/private/tokyo-calendar"
         assert cwds[2299] == "/"
 
     def test_keeps_spaces_in_path(self) -> None:
-        assert parse_lsof_cwd(LSOF_SAMPLE)[4539] == "/Users/me/dir with space"
+        assert parse_lsof_cwd(LSOF_SAMPLE)[4539] == "/Share/me/dir with space"
 
     def test_empty_output(self) -> None:
         assert parse_lsof_cwd("") == {}

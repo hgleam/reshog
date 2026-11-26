@@ -28,7 +28,7 @@ def _snapshot(*entries: PsEntry) -> dict[int, PsEntry]:
 # サンプルを撮り始めた時点で動いていたもの。100 = claude, 200 = pytest, 999 = 自分。
 _BASE = _snapshot(
     _entry(1, 0, "/sbin/launchd"),
-    _entry(100, 1, "/Users/u/.local/bin/claude"),
+    _entry(100, 1, "/Share/u/.local/bin/claude"),
     _entry(200, 1, "/u/.venv/bin/python -m pytest -n 4"),
     _entry(999, 1, "/u/.local/bin/cpuhog"),
 )
@@ -141,7 +141,7 @@ class TestBuildChurn:
     @pytest.fixture(autouse=True)
     def _mock(self, monkeypatch: pytest.MonkeyPatch) -> None:
         base = (
-            "1 0 1 /sbin/launchd\n100 1 1 /Users/u/.local/bin/claude\n"
+            "1 0 1 /sbin/launchd\n100 1 1 /Share/u/.local/bin/claude\n"
             "200 1 1 /usr/bin/make\n999 1 1 cpuhog\n"
         )
         later = base + "300 100 1 (bash)\n301 100 1 gh pr view\n302 999 1 ps -Ao\n"
@@ -155,7 +155,7 @@ class TestBuildChurn:
         monkeypatch.setattr(report, "_clock", lambda: next(clock))
         monkeypatch.setattr(report, "_sleep", self.sleeps.append)
         monkeypatch.setattr(control, "current_pid", lambda: 999)
-        monkeypatch.setattr(collect, "process_cwds", lambda pids: "p100\nn/Users/u/repo\n")
+        monkeypatch.setattr(collect, "process_cwds", lambda pids: "p100\nn/Share/u/repo\n")
         monkeypatch.setattr(collect, "launchd_jobs", lambda: "")
         monkeypatch.setattr(collect, "launchd_domain", lambda: "gui/501")
 
@@ -169,7 +169,7 @@ class TestBuildChurn:
             (100, ("bash", "gh", "bash")),
             (200, ("cc",)),
         ]
-        assert found.sources[0].command == "/Users/u/.local/bin/claude"
+        assert found.sources[0].command == "/Share/u/.local/bin/claude"
         assert self.sleeps == [CHURN_POLL_SECONDS, CHURN_POLL_SECONDS]
 
     def test_project_is_attached_to_the_source(
@@ -198,7 +198,7 @@ class TestRender:
     def test_shows_rate_parent_project_and_children(self) -> None:
         source = ChurnSource(
             pid=55470,
-            command="/Users/u/.local/bin/claude",
+            command="/Share/u/.local/bin/claude",
             origin=Origin(kind="git", name="smart-front"),
             children=("bash",) * 20 + ("gh",) * 4,
         )
