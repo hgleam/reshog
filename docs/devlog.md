@@ -19,7 +19,7 @@ docs の入口（devlog・decisions・playbooks）・CLAUDE.md・形のラチェ
 - **直した 1 点（挙動は同じ）**: `cli.py` が `from . import __version__` でパッケージの入口を読んでいて、層の検査に落ちた。
   版の文字列を `constants.VERSION` に移し、`__init__.py` は `__version__ = VERSION` で再エクスポート、`cli.py` は `constants` から読む。
   `reshog.__version__` と `--version` の出力は変わらない。
-- **台帳は導入時の値で作った**: 予算を超えているのは 7 件（`render.py` の 493 行、`_build_app` 102 行・`render_table` 77 行・
+- **台帳は導入時の値で作った**: 予算を超えているのは 7 件（`render.py` の 493 行（実行行。docstring・コメント・空行を除く）、`_build_app` 102 行・`render_table` 77 行・
   `_render_totals` 61 行、`_kill_process` と `render_table` の複雑度 16、`src/reshog` の直下 17 本）。検査は弱めず、増やせない借金として記録した。
 - **定数・型の混在**: 型の置き場は `types.py` でなく `models.py` として既にある（`test_structure.py` もそう呼ぶ）。改名は全 import に及ぶので、
   定数・型の黙認の表（`tests/test_definitions_live_apart.py`）に理由つきで載せた（直したら行を消さないと落ちる）。

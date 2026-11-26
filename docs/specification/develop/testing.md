@@ -96,6 +96,7 @@ poetry run mypy src       # 型チェック
 - `scripts/check-spec-freshness.sh` が、監視対象コード（`WATCH_PATTERNS`）を変更したのに
   `docs/specification/` を更新していないコミットをブロックする。
 - 有効化は `.githooks/` を `core.hooksPath` に設定する方式（husky は使わない）。
+  （init の標準は `core.hooksPath` を使わず `.git/hooks` から連鎖で呼ぶ形で、この案内との差は未解決。`docs/devlog.md` の未決に記録している）
   **別クローンでは `git config core.hooksPath .githooks` を再実行する必要がある**（README のセットアップ手順参照）。
 - 仕様変更でない場合は `git commit --no-verify` でスキップ可能。
 - 同じ pre-commit が `tests/test_*.py` を glob で全部流す（pytest 形式は `uv run --with pytest pytest`、
